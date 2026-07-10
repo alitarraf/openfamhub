@@ -45,3 +45,21 @@ features:
     details: A family feed of milestones, quotes, and everyday moments with photos — written from the phone, displayed on the wall.
     link: /guide/journal
 ---
+
+<script setup>
+import { withBase } from 'vitepress'
+</script>
+
+<div style="max-width:960px;margin:0 auto;padding:8px 24px 56px;text-align:center;">
+
+## See it in action
+
+<video :poster="withBase('/img/dashboard.png')" autoplay loop muted playsinline controls style="display:block;width:100%;max-width:420px;margin:1.25rem auto 0;border-radius:16px;box-shadow:0 10px 34px rgba(0,0,0,0.16);">
+  <source :src="withBase('/img/product-tour.webm')" type="video/webm" />
+  <source :src="withBase('/img/product-tour.mp4')" type="video/mp4" />
+  <img :src="withBase('/img/dashboard.png')" alt="OpenFamHub dashboard" style="width:100%;border-radius:16px;" />
+</video>
+
+<p style="margin-top:.75rem;font-size:.9em;opacity:.7;">A quick tour of the wall — Home, Calendar, Chores, Rewards, Meals, Budget, and Journal.</p>
+
+</div>

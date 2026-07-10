@@ -22,11 +22,25 @@ import { dirname, join } from 'node:path';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const EXAMPLE_PATH = join(ROOT, 'config', 'members.example.json');
 
-function roster() {
+function rosterPath() {
   const configPath = (process.env.MEMBERS_CONFIG || '').trim() || join(ROOT, 'config', 'members.json');
-  const path = existsSync(configPath) ? configPath : EXAMPLE_PATH;
-  return JSON.parse(readFileSync(path, 'utf8'));
+  return existsSync(configPath) ? configPath : EXAMPLE_PATH;
 }
+
+function roster() {
+  return JSON.parse(readFileSync(rosterPath(), 'utf8'));
+}
+
+/** True only when NOTHING is configured — no `MEMBERS_CONFIG`, no
+ * `config/members.json` — so we've fallen back to the shipped example roster.
+ * i.e. a genuinely out-of-the-box/demo instance. An explicitly-set
+ * `MEMBERS_CONFIG` (even one pointing at the example file, as the tests do)
+ * counts as configured, so it never trips demo data seeding.
+ * Used to gate the demo seed (see server/demo/seed.js). */
+export const usingFallbackRoster = () => {
+  if ((process.env.MEMBERS_CONFIG || '').trim()) return false;
+  return !existsSync(join(ROOT, 'config', 'members.json'));
+};
 
 /** Roster with each member's Todoist UID resolved from env. Read at call-time
  * (like the other sources) so `docker compose up -d` picks up changes to

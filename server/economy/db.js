@@ -14,9 +14,11 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { migrate } from '../db/migrations.js';
+import { seedDemo } from '../demo/seed.js';
 
 export const DB_PATH = process.env.ECONOMY_DB_PATH || '/db/openfamhub.sqlite';
 mkdirSync(dirname(DB_PATH), { recursive: true });
 
 export const db = new Database(DB_PATH);
 migrate(db);
+seedDemo(db); // no-op unless this is a demo instance with empty tables (see server/demo/seed.js)
