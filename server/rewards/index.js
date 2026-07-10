@@ -47,7 +47,10 @@ const rowToReward = (r) => ({
  */
 export function getRewards({ includeHidden = false } = {}) {
   const overrides = Object.fromEntries(
-    db.prepare('SELECT id, hidden FROM reward_overrides').all().map((o) => [o.id, !!o.hidden])
+    db
+      .prepare('SELECT id, hidden FROM reward_overrides')
+      .all()
+      .map((o) => [o.id, !!o.hidden])
   );
   const base = baseRewards().map((r) => ({ ...r, hidden: overrides[r.id] || false, source: 'builtin' }));
   const custom = db.prepare('SELECT * FROM custom_rewards ORDER BY created_at').all().map(rowToReward);
@@ -122,9 +125,14 @@ export function updateReward(id, fields) {
     throw new Error(isBuiltin(id) ? 'built-in rewards can only be hidden, not edited' : `unknown reward "${id}"`);
   }
   const { name, icon, catKey, cost } = cleanFields(fields);
-  db.prepare(
-    `UPDATE custom_rewards SET name = ?, icon = ?, cat_key = ?, cost = ?, updated_at = ? WHERE id = ?`
-  ).run(name, icon, catKey, cost, nowIso(), id);
+  db.prepare(`UPDATE custom_rewards SET name = ?, icon = ?, cat_key = ?, cost = ?, updated_at = ? WHERE id = ?`).run(
+    name,
+    icon,
+    catKey,
+    cost,
+    nowIso(),
+    id
+  );
   return getReward(id);
 }
 

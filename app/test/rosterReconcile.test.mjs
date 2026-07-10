@@ -23,7 +23,10 @@ ok('grows a small list to a large roster (7 members), in roster order', () => {
   ];
   const roster = ['parent1', 'parent2', 'kid1', 'kid2', 'kid3', 'kid4', 'kid5'];
   reconcileList(list, roster, empty);
-  assert.deepEqual(list.map((x) => x.id), roster); // exact roster order, not append order
+  assert.deepEqual(
+    list.map((x) => x.id),
+    roster
+  ); // exact roster order, not append order
   assert.deepEqual(list[2], { id: 'kid1', points: 0, tasks: [] }); // fresh empty entry
 });
 
@@ -39,7 +42,10 @@ ok('preserves surviving entries and reorders to match the roster, even with part
   ];
   const roster = ['parent1', 'parent2', 'kid1', 'kid2', 'kid3'];
   reconcileList(list, roster, empty);
-  assert.deepEqual(list.map((x) => x.id), roster);
+  assert.deepEqual(
+    list.map((x) => x.id),
+    roster
+  );
   // kid1's hydrated data is preserved by identity, not reset to empty
   assert.deepEqual(list.find((x) => x.id === 'kid1').tasks, ['make bed']);
   assert.equal(list.find((x) => x.id === 'kid1').points, 10);
@@ -54,7 +60,10 @@ ok('shrinks when the roster shrinks (e.g. a member removed from config)', () => 
     { id: 'c', points: 3, tasks: [] }
   ];
   reconcileList(list, ['a', 'c'], empty);
-  assert.deepEqual(list.map((x) => x.id), ['a', 'c']);
+  assert.deepEqual(
+    list.map((x) => x.id),
+    ['a', 'c']
+  );
 });
 
 ok('mutates the same array reference (Svelte $state reactivity relies on this)', () => {

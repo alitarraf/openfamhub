@@ -38,13 +38,16 @@ ok('a created custom reward appends to the base, tagged source:custom', () => {
   const r = createReward(validFields());
   assert.equal(r.source, 'custom');
   assert.equal(r.id, 'bubble-tea');
-  assert.deepEqual({ name: r.name, icon: r.icon, catKey: r.catKey, cost: r.cost, hidden: r.hidden }, {
-    name: 'Bubble Tea',
-    icon: 'local_cafe',
-    catKey: 'sky',
-    cost: 10,
-    hidden: false
-  });
+  assert.deepEqual(
+    { name: r.name, icon: r.icon, catKey: r.catKey, cost: r.cost, hidden: r.hidden },
+    {
+      name: 'Bubble Tea',
+      icon: 'local_cafe',
+      catKey: 'sky',
+      cost: 10,
+      hidden: false
+    }
+  );
   assert.equal(getRewards().length, BASE_N + 1);
 });
 
