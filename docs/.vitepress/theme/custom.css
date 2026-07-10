@@ -1,0 +1,27 @@
+/* Enlarge the home hero image.
+ *
+ * dashboard.png is a tall portrait wall shot (1000×1678). VitePress's default
+ * hero clamps the image to 320px (392px ≥960px wide), which turns the whole
+ * product into a small thumbnail beside the text. We bump the ceiling so the
+ * screenshot actually reads — height-led, since the image is portrait. The
+ * `.image-src` selector is the default theme's own hero <img>; we only raise
+ * its max-* so nothing else about the layout changes. */
+
+@media (min-width: 640px) {
+  .VPHero .image-src {
+    max-width: 360px;
+    max-height: 560px;
+  }
+}
+
+@media (min-width: 960px) {
+  .VPHero .image-container {
+    /* give the taller image a little more room and pull it up to balance the
+       longer text column on the left */
+    transform: translate(-24px, -20px);
+  }
+  .VPHero .image-src {
+    max-width: 420px;
+    max-height: 660px;
+  }
+}
