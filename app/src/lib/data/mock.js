@@ -267,7 +267,7 @@ export const dashboard = {
     ],
     count: '8 items'
   },
-  meal: { slot: 'Dinner', dish: 'Sheet-pan salmon', detail: '6:30pm · 4 servings' }
+  meal: { slot: 'Dinner', dish: 'Sheet-pan salmon', detail: '6:30pm · 4 servings', img: '/demo/meals/salmon.png' }
 };
 
 // Budget: category budget/spent/left + a true-net total, matching the shape

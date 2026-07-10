@@ -32,7 +32,7 @@
   // Gate the weather card on the first real fetch so we never flash mock values
   // (e.g. a wrong temp/city) before hydrating to the configured location.
   let wxLoaded = $state(false);
-  let meal = $state({ ...dashboard.meal, img: null, slug: null });
+  let meal = $state({ ...dashboard.meal, slug: null });
   // Runs on mount and again on every refresh heartbeat so the wall stays current.
   $effect(() => {
     refreshTick(); // re-run on each heartbeat
