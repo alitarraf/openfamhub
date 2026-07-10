@@ -925,10 +925,7 @@
                   />
                 </span>
                 <div class="rmeta">
-                  <div class="rname">
-                    {r.name}
-                    {#if r.source === 'builtin'}<span class="rbadge">Built-in</span>{/if}
-                  </div>
+                  <div class="rname">{r.name}</div>
                   <div class="rcost">
                     <Icon name="star" size={15} fill color="var(--gold)" />
                     <span>{r.cost}</span>
@@ -1610,22 +1607,10 @@
     min-width: 0;
   }
   .rname {
-    display: flex;
-    align-items: center;
-    gap: 8px;
     font-size: 16px;
     font-weight: 600;
     color: var(--ink);
-  }
-  .rbadge {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    text-transform: uppercase;
-    color: var(--ink-faint);
-    background: var(--bg);
-    border-radius: 999px;
-    padding: 2px 8px;
+    overflow-wrap: anywhere;
   }
   .rcost {
     display: flex;
