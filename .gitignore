@@ -1,0 +1,33 @@
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+
+# Runtime data (shared container volume; may contain fetched financial data)
+# Anchored to repo root so it does NOT match app/src/lib/data/ (frontend mock data).
+/data/
+!/data/.gitkeep
+
+# Real family roster (names/colors) — copy config/members.example.json to create
+config/members.json
+
+# Node
+node_modules/
+npm-debug.log*
+
+# VitePress build output + cache (built by CI, not committed)
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+# Local port remap for running the demo instance alongside another instance
+docker-compose.override.yml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS / editor
+.DS_Store
+*.swp

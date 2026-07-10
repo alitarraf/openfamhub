@@ -1,0 +1,1317 @@
+openapi: 3.1.0
+info:
+  title: OpenFamHub API
+  version: "1.0.0"
+  description: |
+    Read-mostly aggregation API for the OpenFamHub family command center. Aggregates
+    external sources (Todoist, iCal, Mealie, a Monarch Money sidecar, Open-Meteo)
+    behind one small backend so credentials never reach the browser, plus a
+    small first-party economy (chore points -> reward redemption).
+
+    Almost every read endpoint returns **503** when its source isn't configured
+    (missing token/URL/etc.) rather than an error — the frontend keeps rendering
+    from bundled demo data in that case. See `GET /api/health` for a
+    per-source configured/not-configured summary.
+
+    Data-source endpoints (tasks, calendar, meals, budget, weather, photos) are
+    served by whichever provider is selected in `server/providers/registry.js`;
+    paths/shapes below are the *contract* the active provider must satisfy, not
+    tied to any one vendor.
+  license:
+    name: MIT
+servers:
+  - url: /api
+tags:
+  - name: meta
+  - name: tasks
+  - name: calendar
+  - name: budget
+  - name: weather
+  - name: photos
+  - name: meals
+  - name: members
+  - name: rewards
+  - name: journal
+  - name: mobile
+  - name: push
+  - name: babysitter
+
+paths:
+  /health:
+    get:
+      tags: [meta]
+      summary: Per-source configuration status
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  sources:
+                    type: object
+                    properties:
+                      todoist: { type: string, enum: [configured, no-token] }
+                      members: { type: string, enum: [configured, no-uids] }
+                      weather: { type: string, enum: [configured, not-configured] }
+                      calendar: { type: string, enum: [configured, not-configured] }
+
+  /config:
+    get:
+      tags: [meta]
+      summary: Client-facing runtime config (sleep schedule, screensaver timings)
+      description: >-
+        Served from the settings store — a value saved on the wall's Settings
+        screen (DB) overrides the .env default. Public read; writes go through
+        the parent-gated POST /settings.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+
+  /settings:
+    get:
+      tags: [meta]
+      summary: Current settings (parent-gated — same unlock as Budget)
+      description: >-
+        401 until a parent PIN unlock (POST /budget/unlock) — the Settings
+        screen uses that to show its PIN gate.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [meta]
+      summary: Update settings (parent-gated)
+      description: >-
+        Partial update; every provided key must be whitelisted and in range or
+        the whole request 400s (all-or-nothing). Publishes a 'settings' event
+        on /live so every connected wall re-applies immediately.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Settings"
+      responses:
+        "200":
+          description: The full resolved settings after the update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Settings"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /live:
+    get:
+      tags: [meta]
+      summary: Live-update stream (Server-Sent Events)
+      description: >-
+        text/event-stream. Every write endpoint publishes a message
+        `{"kind":"tasks"|"economy"|"journal"|"meals"|"settings"}` so connected
+        clients re-hydrate immediately instead of waiting out the 5-minute
+        poll heartbeat; presence changes arrive as
+        `{"kind":"presence","present":bool}`. Comment pings every 25s keep
+        intermediaries from idling the socket out.
+      responses:
+        "200":
+          description: An open SSE stream (never completes)
+          content:
+            text/event-stream:
+              schema: { type: string }
+
+  /presence:
+    get:
+      tags: [meta]
+      summary: Last reported presence state
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  present: { type: boolean }
+                  changedAt: { type: string, format: date-time, nullable: true }
+    post:
+      tags: [meta]
+      summary: Report presence (wall sensor scaffold)
+      description: >-
+        For a future PIR/mmWave sensor (ESP32 or anything that can HTTP POST).
+        A change publishes `{"kind":"presence"}` on /live; the wall wakes its
+        screensaver (deliberately not scheduled sleep). If PRESENCE_TOKEN is
+        set, the request must carry it in an X-Presence-Token header.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [present]
+              properties:
+                present: { type: boolean }
+      responses:
+        "200":
+          description: Acknowledged
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /babysitter:
+    get:
+      tags: [babysitter]
+      summary: Babysitter lock state + emergency info (public)
+      description: >-
+        What the wall shows a sitter in babysitter lockdown: the global `active`
+        flag (read on boot, so a reload can't escape the lock), the parents
+        block (names live from the roster, phones from the store), emergency
+        contacts, and notes. Public — the wall must render it with no auth.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Babysitter"
+    post:
+      tags: [babysitter]
+      summary: Edit the emergency info (PWA, parents only)
+      description: >-
+        Requires a mobile session whose member is a parent (a signed-in kid
+        403s). Parent-phone keys are whitelisted to actual parents, the contact
+        list and every string are length-capped, blank contacts dropped. Never
+        changes the lock flag. Publishes a 'babysitter' event on /live.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parentPhones:
+                  type: object
+                  additionalProperties: { type: string }
+                  description: "{ memberId: phone } — non-parent keys ignored"
+                contacts:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name: { type: string }
+                      phone: { type: string }
+                notes: { type: string }
+      responses:
+        "200":
+          description: The full resolved babysitter view after the edit
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Babysitter"
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /babysitter/lock:
+    post:
+      tags: [babysitter]
+      summary: Enter babysitter mode (one tap, no PIN)
+      description: >-
+        A parent taps the emergency icon on the wall as they head out. Public
+        by design — the worst a prankster does is lock the wall, which any
+        parent PIN reverses. Publishes a 'babysitter' event on /live.
+      responses:
+        "200":
+          description: The new state (active true)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Babysitter"
+
+  /babysitter/unlock:
+    post:
+      tags: [babysitter]
+      summary: Leave babysitter mode (parent PIN)
+      description: >-
+        Verifies a parent's PIN (no session/cookie minted — a one-shot
+        confirmation) and clears the lock. 401 on a wrong or non-parent PIN.
+        Publishes a 'babysitter' event on /live.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberId, pin]
+              properties:
+                memberId: { type: string }
+                pin: { type: string }
+      responses:
+        "200":
+          description: The new state (active false)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Babysitter"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /members:
+    get:
+      tags: [members]
+      summary: The family roster (no Todoist UIDs or PINs)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Member" }
+
+  /tasks/{list}:
+    get:
+      tags: [tasks]
+      summary: A flat task list for a dashboard card (currently just `todos`)
+      parameters:
+        - $ref: "#/components/parameters/ListName"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /tasks/{id}/{action}:
+    post:
+      tags: [tasks]
+      summary: Close or reopen a Todoist task (tap-to-complete)
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+        - $ref: "#/components/parameters/CloseReopenAction"
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+
+  /board/{board}:
+    get:
+      tags: [tasks]
+      summary: Per-member task board (`todo` | `routine`), split by assignee
+      parameters:
+        - name: board
+          in: path
+          required: true
+          schema: { type: string, enum: [todo, routine] }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Board" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /board/routine/{id}/{action}:
+    post:
+      tags: [tasks]
+      summary: Close/reopen a Routine·Chore task and award/revert its point
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+        - $ref: "#/components/parameters/CloseReopenAction"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberId]
+              properties:
+                memberId: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  balance: { type: integer }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+
+  /todoist/collaborators:
+    get:
+      tags: [tasks]
+      summary: Discovery helper — list collaborators of the configured board projects
+      description: Used once, at setup time, to find each member's Todoist UID for `.env`.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  projects:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        project: { type: string }
+                        collaborators:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              id: { type: string }
+                              name: { type: string }
+                              email: { type: string }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /avatars:
+    get:
+      tags: [members]
+      summary: Per-member avatar URLs sourced from Todoist (cosmetic; never fails)
+      responses:
+        "200":
+          description: OK (empty object on any failure)
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: { type: string, format: uri }
+
+  /balances:
+    get:
+      tags: [rewards]
+      summary: Per-member point balances
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BalanceMap" }
+
+  /balances/today:
+    get:
+      tags: [rewards]
+      summary: Per-member points earned today (net of same-day reverts)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BalanceMap" }
+
+  /rewards:
+    get:
+      tags: [rewards]
+      summary: Reward catalog + who's working toward what + balances
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  catalog:
+                    type: array
+                    items: { $ref: "#/components/schemas/Reward" }
+                  assignments:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items: { type: string }
+                  balances: { $ref: "#/components/schemas/BalanceMap" }
+
+  /rewards/{id}/assign:
+    post:
+      tags: [rewards]
+      summary: Assign a catalog reward to a member's "working toward" list
+      parameters: [{ $ref: "#/components/parameters/RewardId" }]
+      requestBody: { $ref: "#/components/requestBodies/MemberId" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /rewards/{id}/unassign:
+    post:
+      tags: [rewards]
+      summary: Remove a reward from a member's "working toward" list
+      parameters: [{ $ref: "#/components/parameters/RewardId" }]
+      requestBody: { $ref: "#/components/requestBodies/MemberId" }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /rewards/{id}/redeem:
+    post:
+      tags: [rewards]
+      summary: Redeem a reward — deducts balance, logs, drops the assignment
+      parameters: [{ $ref: "#/components/parameters/RewardId" }]
+      requestBody: { $ref: "#/components/requestBodies/MemberId" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { ok: { type: boolean }, balance: { type: integer } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: Insufficient balance
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /weather:
+    get:
+      tags: [weather]
+      summary: Current conditions + forecast strip
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  today: { $ref: "#/components/schemas/WeatherToday" }
+                  week:
+                    type: array
+                    items: { $ref: "#/components/schemas/WeatherDay" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /photos:
+    get:
+      tags: [photos]
+      summary: Screensaver photo filenames (served from `data/photos/`)
+      responses:
+        "200":
+          description: OK (empty list if unconfigured/empty)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  files: { type: array, items: { type: string } }
+
+  /photos/img/{filename}:
+    get:
+      tags: [photos]
+      summary: Static file serve for a screensaver photo
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Image bytes
+        "404":
+          description: Not found
+
+  /calendar:
+    get:
+      tags: [calendar]
+      summary: Calendar events in a window
+      parameters:
+        - name: start
+          in: query
+          schema: { type: string, format: date-time }
+          description: Defaults to 14 days before now
+        - name: end
+          in: query
+          schema: { type: string, format: date-time }
+          description: Defaults to 28 days after now
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  events:
+                    type: array
+                    items: { $ref: "#/components/schemas/CalendarEvent" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /budget:
+    get:
+      tags: [budget]
+      summary: Budget snapshot (from the Monarch Money sidecar's JSON file / history dir)
+      parameters:
+        - name: period
+          in: query
+          required: false
+          schema: { type: string, enum: [month, last, ytd], default: month }
+          description: >-
+            'last' and 'ytd' read fetcher/fetch_monarch.py's history
+            directory (one file per captured month) — 503 if that period
+            hasn't been captured yet, a real state until the sidecar has run
+            across a month boundary, not an error.
+      responses:
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401":
+          description: Budget locked — unlock first via POST /budget/unlock (parent PIN)
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  updated: { type: string, format: date-time, nullable: true }
+                  demo: { type: boolean }
+                  totals:
+                    description: >-
+                      True net across every category, including unbudgeted
+                      spend and overspending — sum(budget) - sum(spent), not
+                      floored per-category. The Budget screen's "safe to
+                      spend" hero number.
+                    type: object
+                    properties:
+                      budget: { type: number }
+                      spent: { type: number }
+                      left: { type: number }
+                  budgets:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        category: { type: string }
+                        budget: { type: number }
+                        spent: { type: number }
+                        left: { type: number }
+                        icon: { type: string, description: "Material Symbols name, from a curated category->icon map (server/config/budget-categories.js), defaulted if unmatched" }
+                        catKey: { type: string, description: "Palette key into the shared 5-color cat palette" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /budget/unlock:
+    post:
+      tags: [budget]
+      summary: Parent PIN unlock for the Budget tab (and the Settings screen)
+      description: >-
+        Verifies a PIN for a member listed in BUDGET_UNLOCK_MEMBERS and sets a
+        short-lived unlock cookie (re-locks after 15 idle minutes) — separate
+        from the mobile session cookie, so unlocking on the shared wall doesn't
+        hand out a day-long mobile session. Shares the mobile login's
+        per-member attempt lockout.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberId, pin]
+              properties:
+                memberId: { type: string }
+                pin: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /journal:
+    get:
+      tags: [journal]
+      summary: Family journal feed/timeline + the "on this day" callback + tag catalog
+      description: >-
+        Public/no-auth — the wall is login-free by design, same as every
+        other tap-to-complete surface. Both the wall (Feed/Timeline views)
+        and the PWA read this same endpoint.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entries:
+                    type: array
+                    items: { $ref: "#/components/schemas/JournalEntry" }
+                  onThisDay:
+                    description: Past-year entries sharing today's month-day
+                    type: array
+                    items: { $ref: "#/components/schemas/JournalEntry" }
+                  tags:
+                    type: array
+                    items: { $ref: "#/components/schemas/JournalTag" }
+    post:
+      tags: [journal]
+      summary: Create a journal entry
+      description: >-
+        PWA-only — nothing is authored on-wall by design. The author is
+        always the logged-in session, never the request body.
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 2000 }
+                tag: { type: string, description: "One of the tag catalog's ids, or omitted" }
+                memberIds: { type: string, description: "JSON-encoded array of member ids this entry is about" }
+                photo: { type: string, format: binary }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { ok: { type: boolean }, entry: { $ref: "#/components/schemas/JournalEntry" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /journal/{id}/edit:
+    post:
+      tags: [journal]
+      summary: Edit an entry — self-service, only the original poster
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: "#/components/parameters/JournalEntryId" }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [text]
+              properties:
+                text: { type: string, maxLength: 2000 }
+                tag: { type: string, nullable: true }
+                memberIds: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { ok: { type: boolean }, entry: { $ref: "#/components/schemas/JournalEntry" } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Entry doesn't exist, or isn't this session's own
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /journal/{id}/delete:
+    post:
+      tags: [journal]
+      summary: Delete an entry — self-service, only the original poster. Cleans up its photo file, if any.
+      security: [{ sessionCookie: [] }]
+      parameters: [{ $ref: "#/components/parameters/JournalEntryId" }]
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404":
+          description: Entry doesn't exist, or isn't this session's own
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /journal/{id}/heart:
+    post:
+      tags: [journal]
+      summary: Tap-to-heart — anonymous, like every other on-wall tap (no login there by design)
+      parameters: [{ $ref: "#/components/parameters/JournalEntryId" }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { ok: { type: boolean }, hearts: { type: integer } }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /mealplan:
+    get:
+      tags: [meals]
+      summary: Weekly meal plan grid
+      parameters:
+        - name: start
+          in: query
+          required: true
+          schema: { type: string, format: date }
+        - name: end
+          in: query
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  slots: { type: array, items: { type: string } }
+                  days:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items: { $ref: "#/components/schemas/MealCell" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /mealie/img/{id}:
+    get:
+      tags: [meals]
+      summary: Recipe thumbnail proxy (cached webp)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Image bytes (image/webp)
+        "404":
+          description: Not found
+
+  /recipes:
+    get:
+      tags: [meals]
+      summary: Recipe library (read-only browse)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RecipeSummary" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /recipes/{slug}:
+    get:
+      tags: [meals]
+      summary: Recipe detail
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecipeDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /recipes/{id}/add-to-grocery:
+    post:
+      tags: [meals]
+      summary: Add a recipe's ingredients to the shared grocery list
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /recipes/{id}/add-to-mealplan:
+    post:
+      tags: [meals]
+      summary: Assign a recipe to a day/slot in Mealie's own meal plan
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [date, slot]
+              properties:
+                date: { type: string, format: date }
+                slot: { type: string, enum: [breakfast, lunch, dinner, side] }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /grocery:
+    get:
+      tags: [meals]
+      summary: The shared grocery list (Mealie's shopping list)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TaskList" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /grocery/{id}/{action}:
+    post:
+      tags: [meals]
+      summary: Check or uncheck a grocery item
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+        - $ref: "#/components/parameters/CloseReopenAction"
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /mobile/login:
+    post:
+      tags: [mobile]
+      summary: Companion PWA login (per-member 4-digit PIN)
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [memberId, pin]
+              properties:
+                memberId: { type: string }
+                pin: { type: string }
+      responses:
+        "200":
+          description: OK — sets an HttpOnly session cookie
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { memberId: { type: string } }
+        "401":
+          description: Wrong PIN, unknown member, or locked out
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  /mobile/logout:
+    post:
+      tags: [mobile]
+      summary: End the companion PWA session
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+
+  /mobile/me:
+    get:
+      tags: [mobile]
+      summary: The logged-in member for the current session cookie
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { memberId: { type: string } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /mobile/chores:
+    get:
+      tags: [mobile]
+      summary: The logged-in member's own Routine·Chore tasks + balance
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tasks:
+                    type: array
+                    items: { $ref: "#/components/schemas/Task" }
+                  balance: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /mobile/chores/{id}/{action}:
+    post:
+      tags: [mobile]
+      summary: Close/reopen one of the logged-in member's own chores
+      security: [{ sessionCookie: [] }]
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+        - $ref: "#/components/parameters/CloseReopenAction"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { ok: { type: boolean }, balance: { type: integer } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "502": { $ref: "#/components/responses/UpstreamError" }
+
+  /push/vapid-key:
+    get:
+      tags: [push]
+      summary: The server's VAPID public key (not a secret)
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key: { type: string }
+        "503": { $ref: "#/components/responses/NotConfigured" }
+
+  /push/status:
+    get:
+      tags: [push]
+      summary: Whether push is configured and this member has a subscription
+      security: [{ sessionCookie: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  configured: { type: boolean }
+                  subscribed: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /push/subscribe:
+    post:
+      tags: [push]
+      summary: Register this browser's push subscription for the logged-in member
+      description: >-
+        Body is the browser's PushSubscription.toJSON() ({ endpoint, keys:
+        { p256dh, auth } }). Scheduled notifications (chore reminder, dinner
+        digest) go to the members listed in PUSH_MEMBERS. Requires a secure
+        context on the client — see docs/deployment/self-hosting.md for
+        `tailscale serve` HTTPS mode.
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint, keys]
+              properties:
+                endpoint: { type: string }
+                keys:
+                  type: object
+                  required: [p256dh, auth]
+                  properties:
+                    p256dh: { type: string }
+                    auth: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /push/unsubscribe:
+    post:
+      tags: [push]
+      summary: Drop a push subscription by endpoint
+      security: [{ sessionCookie: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [endpoint]
+              properties:
+                endpoint: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: openfamhub_session
+
+  parameters:
+    ListName:
+      name: list
+      in: path
+      required: true
+      schema: { type: string, enum: [todos] }
+    TaskId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    RewardId:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    CloseReopenAction:
+      name: action
+      in: path
+      required: true
+      schema: { type: string, enum: [close, reopen] }
+    JournalEntryId:
+      name: id
+      in: path
+      required: true
+      schema: { type: integer }
+
+  requestBodies:
+    MemberId:
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [memberId]
+            properties: { memberId: { type: string } }
+
+  responses:
+    Ok:
+      description: OK
+      content:
+        application/json:
+          schema:
+            type: object
+            properties: { ok: { type: boolean } }
+    BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Unknown resource
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Not logged in
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Logged in, but not allowed (e.g. a non-parent editing babysitter info)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotConfigured:
+      description: Source not configured, or upstream unreachable — client falls back to demo data
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    UpstreamError:
+      description: Upstream (e.g. Todoist) rejected the write
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Settings:
+      type: object
+      description: >-
+        The wall-editable settings (server/settings/index.js is the
+        whitelist). Resolution per key — DB row (saved on the Settings
+        screen) → .env → hardcoded default.
+      properties:
+        sleepStartHour: { type: integer, minimum: 0, maximum: 23 }
+        sleepEndHour: { type: integer, minimum: 0, maximum: 23 }
+        screensaverIdleMin: { type: integer, minimum: 1, maximum: 120 }
+        screensaverCycleSec: { type: integer, minimum: 5, maximum: 300 }
+        pushChoreReminder: { type: integer, enum: [0, 1], description: "Kill-switch for the scheduled morning chore reminder" }
+        pushDinnerDigest: { type: integer, enum: [0, 1], description: "Kill-switch for the scheduled dinner digest" }
+
+    Babysitter:
+      type: object
+      description: >-
+        Babysitter lock state + the emergency info the wall shows a sitter
+        (server/babysitter/index.js). Parent names come live from the roster;
+        only phones, contacts, and notes are stored.
+      properties:
+        active: { type: boolean, description: "Wall is in babysitter lockdown" }
+        parents:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              color: { type: string }
+              phone: { type: string }
+        contacts:
+          type: array
+          items:
+            type: object
+            properties:
+              name: { type: string }
+              phone: { type: string }
+        notes: { type: string }
+
+    Error:
+      type: object
+      properties:
+        error: { type: string }
+
+    Member:
+      type: object
+      required: [id, name, color]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        color: { type: string }
+
+    Task:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        done: { type: boolean }
+
+    TaskList:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Task" }
+        count: { type: string }
+        left: { type: string }
+
+    Board:
+      type: object
+      properties:
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              tasks:
+                type: array
+                items: { $ref: "#/components/schemas/Task" }
+
+    BalanceMap:
+      type: object
+      additionalProperties: { type: integer }
+      example: { dad: 12, mom: 8, kid1: 3, kid2: 5 }
+
+    Reward:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        icon: { type: string }
+        catKey: { type: string }
+        cost: { type: integer }
+
+    JournalTag:
+      type: object
+      properties:
+        id: { type: string, enum: [milestone, quote, school, health] }
+        label: { type: string }
+        icon: { type: string }
+        catKey: { type: string }
+
+    JournalEntry:
+      type: object
+      properties:
+        id: { type: integer }
+        authorId: { type: string, description: "Who posted it (the PWA session)" }
+        text: { type: string }
+        tag: { type: string, nullable: true }
+        photoPath: { type: string, nullable: true, description: "Filename served at /api/journal/img/{photoPath}" }
+        hearts: { type: integer }
+        localDate: { type: string, format: date, description: "Server-local date, drives timeline grouping + on-this-day matching" }
+        createdAt: { type: string, format: date-time }
+        memberIds:
+          description: Who this entry is about/involves (separate from authorId)
+          type: array
+          items: { type: string }
+
+    WeatherToday:
+      type: object
+      properties:
+        wx: { type: string, enum: [sunny, partly, cloudy, rain, snow] }
+        temp: { type: integer }
+        hi: { type: integer, nullable: true }
+        lo: { type: integer, nullable: true }
+        place: { type: string }
+
+    WeatherDay:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        day: { type: string }
+        wx: { type: string, enum: [sunny, partly, cloudy, rain, snow] }
+        hi: { type: integer }
+        lo: { type: integer }
+        today: { type: boolean }
+
+    CalendarEvent:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        time: { type: string }
+        title: { type: string }
+        color: { type: string, description: "The owning member's roster color, or a palette color for a shared/unattributed feed" }
+        m: { type: string, nullable: true, description: "Member id from a CALENDAR_ICS_URL_<ID> feed, or null for a shared CALENDAR_ICS_URL feed" }
+
+    MealCell:
+      type: object
+      nullable: true
+      properties:
+        title: { type: string }
+        img: { type: string, nullable: true }
+        slug: { type: string, nullable: true }
+
+    RecipeSummary:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        img: { type: string }
+        time: { type: integer, nullable: true }
+        description: { type: string }
+
+    RecipeDetail:
+      type: object
+      properties:
+        id: { type: string }
+        slug: { type: string }
+        title: { type: string }
+        img: { type: string }
+        servings: { type: integer, nullable: true }
+        time: { type: integer, nullable: true }
+        ingredients: { type: array, items: { type: string } }
+        instructions: { type: array, items: { type: string } }

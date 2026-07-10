@@ -1,0 +1,122 @@
+# OpenFamHub — container stack
+# Two services:
+#   1. app             — the Node backend (server/) + built Svelte SPA, on :8080
+#   2. monarch-fetcher — optional Python sidecar that scrapes Monarch Money
+#                        into shared data for the Budget card
+
+services:
+  # OpenFamHub backend + SPA. The Node server (server/) serves the built SPA on
+  # :8080 AND exposes /api/* (tokens stay server-side).
+  # Rebuild the bundle first with `cd app && npm run build`; then refresh.
+  app:
+    image: node:20
+    container_name: openfamhub_app
+    working_dir: /server
+    command: sh -c "npm install --no-audit --no-fund && node index.js"
+    ports:
+      # Defaults to every interface (reachable from your whole LAN). To
+      # restrict to this host only — e.g. pairing with `tailscale serve` so
+      # only your tailnet can reach it, not plain LAN wifi — set BIND_ADDR=
+      # 127.0.0.1 in .env. See docs/deployment/self-hosting.md.
+      - "${BIND_ADDR:-0.0.0.0}:8080:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      TZ: ${TZ:-America/New_York}
+      SLEEP_START_HOUR: ${SLEEP_START_HOUR:-22}
+      SLEEP_END_HOUR: ${SLEEP_END_HOUR:-7}
+      # Fresh-install defaults only — values saved on the wall's Settings
+      # screen live in the DB and win over these (server/settings/index.js).
+      SCREENSAVER_IDLE_MIN: ${SCREENSAVER_IDLE_MIN:-3}
+      SCREENSAVER_CYCLE_SEC: ${SCREENSAVER_CYCLE_SEC:-20}
+      # Web push (chore reminder + dinner digest to the parents' phones) —
+      # blank VAPID keys = push quietly disabled. See .env.example.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      PUSH_MEMBERS: ${PUSH_MEMBERS:-dad,mom}
+      CHORE_REMINDER_HOUR: ${CHORE_REMINDER_HOUR:-8}
+      DINNER_DIGEST_HOUR: ${DINNER_DIGEST_HOUR:-17}
+      PUSH_CHORE_REMINDER: ${PUSH_CHORE_REMINDER:-1}
+      PUSH_DINNER_DIGEST: ${PUSH_DINNER_DIGEST:-1}
+      # Weekly/monthly recap auto-posted into the Journal:
+      RECAP_HOUR: ${RECAP_HOUR:-19}
+      # Optional shared token for the presence sensor endpoint:
+      PRESENCE_TOKEN: ${PRESENCE_TOKEN:-}
+      # Read by server/sources/* (all kept out of the client / git):
+      TODOIST_TOKEN: ${TODOIST_TOKEN:-}
+      # Per-member Tasks screens: one shared project per tab, split by assignee.
+      TODOIST_TODO_PROJECT: ${TODOIST_TODO_PROJECT:-}
+      TODOIST_ROUTINE_PROJECT: ${TODOIST_ROUTINE_PROJECT:-}
+      # The roster (config/members.json) drives which <ID> suffixes exist —
+      # set TODOIST_UID_<ID> / MEMBER_PIN_<ID> to match. Shown here for the
+      # bundled example roster (config/members.example.json):
+      TODOIST_UID_DAD: ${TODOIST_UID_DAD:-}
+      TODOIST_UID_MOM: ${TODOIST_UID_MOM:-}
+      TODOIST_UID_KID1: ${TODOIST_UID_KID1:-}
+      TODOIST_UID_KID2: ${TODOIST_UID_KID2:-}
+      # Companion PWA login — 4-digit PIN per member (Phase 6):
+      MEMBER_PIN_DAD: ${MEMBER_PIN_DAD:-}
+      MEMBER_PIN_MOM: ${MEMBER_PIN_MOM:-}
+      MEMBER_PIN_KID1: ${MEMBER_PIN_KID1:-}
+      MEMBER_PIN_KID2: ${MEMBER_PIN_KID2:-}
+      # Who can PIN-unlock the wall's Budget tab (see auth.js) — defaults to dad,mom.
+      BUDGET_UNLOCK_MEMBERS: ${BUDGET_UNLOCK_MEMBERS:-dad,mom}
+      # No default location — blank means the weather card falls back to mock
+      # until you set these in .env.
+      WEATHER_LAT: ${WEATHER_LAT:-}
+      WEATHER_LON: ${WEATHER_LON:-}
+      WEATHER_UNITS: ${WEATHER_UNITS:-imperial}
+      WEATHER_PLACE: ${WEATHER_PLACE:-}
+      CALENDAR_ICS_URL: ${CALENDAR_ICS_URL:-}
+      # Mealie (Meals screen): base URL + API token. Thumbnails cache to /data.
+      MEALIE_URL: ${MEALIE_URL:-}
+      MEALIE_TOKEN: ${MEALIE_TOKEN:-}
+      # Browser-facing Mealie URL for the companion PWA's "Meals" launcher tab —
+      # the HTTPS URL your phone reaches Mealie at (NOT the container-side
+      # MEALIE_URL above). Blank = the Meals tab is hidden. Never a token, so
+      # it's safe to hand to the client.
+      MEALIE_APP_URL: ${MEALIE_APP_URL:-}
+      # Budget snapshot written by the monarch-fetcher into the shared ./data volume:
+      MONARCH_JSON: /data/monarch.json
+    volumes:
+      - ./server:/server
+      - ./app:/app
+      - ./data:/data
+      # server/index.js reads both of these at container root
+      # (join(__dirname, '..', X) from /server resolves to /X) — without
+      # these two mounts the container crashes on startup (ENOENT), even on
+      # a fresh `docker compose up` with an empty .env.
+      - ./openapi.yaml:/openapi.yaml
+      - ./config:/config
+      # Economy DB (points/rewards ledger) on a named volume, NOT ./data — ./data
+      # is a /mnt/d bind mount (Windows drvfs), which doesn't honor the POSIX
+      # locks SQLite needs (same reason Mealie's SQLite uses a named volume, not
+      # a bind mount — see DEVLOG). This is the one truly irreplaceable state in
+      # the app, so it gets the safe path even though it means `docker cp` /
+      # `sqlite3 .backup` for backups instead of the D:\ file-copy pattern.
+      - openfamhub-economy:/db
+    restart: unless-stopped
+
+  monarch-fetcher:
+    build: ./fetcher
+    container_name: openfamhub_monarch_fetcher
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      TZ: ${TZ:-America/New_York}
+      MONARCH_EMAIL: ${MONARCH_EMAIL:-}
+      MONARCH_PASSWORD: ${MONARCH_PASSWORD:-}
+      MONARCH_TOTP_SECRET: ${MONARCH_TOTP_SECRET:-}
+      # Cron cadence (minutes) for refreshing the financial snapshot:
+      FETCH_INTERVAL_MIN: ${FETCH_INTERVAL_MIN:-30}
+    volumes:
+      # Writes /data/monarch.json → host ./data, where server/sources/monarch.js
+      # reads it (same path the `app` service mounts). Must stay aligned.
+      - ./data:/data
+    restart: unless-stopped
+
+volumes:
+  openfamhub-economy:

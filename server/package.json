@@ -1,0 +1,30 @@
+{
+  "name": "openfamhub-server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "OpenFamHub backend — aggregates data sources (tokens stay server-side) and serves the built SPA.",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test test/",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "express": "^4.21.0",
+    "jimp": "^1.6.1",
+    "multer": "^2.0.0",
+    "node-ical": "^0.20.1",
+    "swagger-ui-express": "^5.0.1",
+    "web-push": "^3.6.7",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.6.0",
+    "globals": "^17.7.0",
+    "prettier": "^3.9.4"
+  }
+}

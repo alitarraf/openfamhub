@@ -1,0 +1,98 @@
+/* ============================================================
+   OpenFamHub — design tokens
+   Family touchscreen command center. Light theme, portrait-first.
+   Solid fills, one flat shadow, no blur (tuned for low-power kiosk hardware).
+   ============================================================ */
+
+:root {
+  /* ---- Neutrals / surface ------------------------------------ */
+  --bg: #f4f6fa; /* app background          */
+  --surface: #ffffff; /* cards                   */
+  --surface-2: #fbfcfe; /* nested / inset panels   */
+  --ink: #27313f; /* primary text            */
+  --ink-soft: #5b6675; /* secondary text          */
+  --ink-faint: #98a2b3; /* tertiary / placeholders */
+  --hairline: #e6eaf0; /* borders, dividers       */
+  --hairline-2: #eef1f6; /* faint fills, track bg   */
+
+  /* ---- Signature accent (banner numerals) -------------------- */
+  --gold: #c9a24b;
+  --gold-soft: #f3e9cf; /* tint behind gold        */
+  --gold-ink: #8a6d1f; /* readable gold-dark text */
+
+  /* ---- Semantic ---------------------------------------------- */
+  --good: #2fa37c; /* completed / in-stock    */
+  --warn: #e0a11b; /* expiring / due soon     */
+  --bad: #e0664b; /* overdue / out-of-stock  */
+
+  /* ---- Per-person palette (8, vibrant, white-legible) -------- */
+  --p-sky: #2e8bc0;
+  --p-fern: #2fa37c;
+  --p-rose: #e0699a;
+  --p-amber: #e0a11b;
+  --p-iris: #8e6fd8;
+  --p-coral: #e0664b;
+  --p-teal: #4ab5a8;
+  --p-berry: #c0526b;
+  /* Per-member runtime theming sets these on a scope:
+     --person      : the member's solid color (one of the 8)
+     --person-tint : 12% wash for card fills / chips
+     --person-tint-border : matching border for tinted cards   */
+  --person: var(--p-sky);
+  --person-tint: #e7f1f8;
+  --person-tint-border: #cde4f2;
+
+  /* ---- Type ---------------------------------------------------
+     display = Fredoka (rounded, friendly): banners, numerals, headers
+     body    = Hanken Grotesk: data, labels, task copy
+     Self-host both on the appliance (no font CDN), <=2 weights each. */
+  --font-display: 'Fredoka', system-ui, sans-serif;
+  --font-body: 'Hanken Grotesk', system-ui, -apple-system, sans-serif;
+
+  /* type scale (px) */
+  --t-banner: 136px; /* hero month / clock numerals */
+  --t-display: 56px; /* screen titles               */
+  --t-h1: 34px;
+  --t-h2: 26px;
+  --t-h3: 21px;
+  --t-body: 18px; /* base on-wall reading size   */
+  --t-label: 15px;
+  --t-caption: 13px; /* min on-wall size            */
+
+  --w-regular: 400;
+  --w-medium: 500;
+  --w-semibold: 600;
+  --w-bold: 700;
+
+  /* ---- Spacing (8pt base) ------------------------------------ */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+  --s-16: 64px;
+
+  /* ---- Radius (generous, rounded-friendly) ------------------- */
+  --r-sm: 10px;
+  --r-md: 16px; /* default card                */
+  --r-lg: 24px; /* hero cards, banners         */
+  --r-xl: 32px;
+  --r-pill: 999px;
+
+  /* ---- Elevation (the ONE flat shadow — no blur stacks) ------ */
+  --shadow: 0 6px 18px rgba(39, 49, 63, 0.06);
+  --shadow-press: 0 2px 6px rgba(39, 49, 63, 0.05);
+
+  /* ---- Touch ------------------------------------------------- */
+  --hit: 64px; /* minimum tap target on the wall */
+  --hit-min: 44px; /* minimum on companion PWA       */
+
+  /* ---- Motion (restrained — no ambient loops on the wall) ---- */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+}

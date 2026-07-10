@@ -1,0 +1,80 @@
+# OpenFamHub — ~/.xinitrc for the wall kiosk
+# Copy to ~/.xinitrc on the target. Starts Openbox + Chromium in kiosk mode
+# pointed at the OpenFamHub Svelte app (server/index.js, docker-compose
+# `app` service). Run by `startx` (autostarted from .bash_profile — see
+# setup-kiosk.sh).
+#
+# ⚠️ The two variables below (OUTPUT, ROTATE) and the touch coordinate
+# transform depend entirely on your specific display/touchscreen hardware and
+# MUST be confirmed on your device — everything else (app URL, Chromium
+# flags) should be correct as-is.
+
+# Disable screen blanking / DPMS done by X itself; sleep is handled in-app
+# (a DOM blackout overlay) instead — on some touchscreens, `xset dpms force
+# off` kills USB-touch wake, so avoid it here.
+xset s off
+xset s noblank
+xset -dpms
+
+# --- Portrait rotation (designed for 1080x1920 portrait; skip this section
+# if your display is already portrait natively) -----------------------------
+# 1. Find the real output name:              xrandr --query
+#    (commonly HDMI-1, HDMI-A-1, or VGA-1 on a thin client)
+# 2. Rotate to match which way the monitor is physically mounted:
+#    `left` = rotated counter-clockwise, `right` = clockwise. Try one; if the
+#    image is upside-down, use the other.
+# 3. Confirm afterward with `xrandr --query` that the reported resolution
+#    reads 1080x1920, not 1920x1080 — the app sizes itself off of
+#    window.innerWidth/innerHeight, so this must be right before Chromium
+#    launches, not fixed up after.
+# NOTE: the output name xrandr reports can differ from the DRM connector name
+# under /sys/class/drm (e.g. a card0-DP-1 connector can show up as
+# "DisplayPort-0" in `xrandr --query` depending on driver/kernel version) —
+# always confirm with `xrandr --query` directly, don't infer it from the
+# connector list.
+OUTPUT="${OPENFAMHUB_OUTPUT:-HDMI-1}"        # CONFIRM on hardware — xrandr --query
+ROTATE="${OPENFAMHUB_ROTATE:-left}"          # CONFIRM on hardware — left|right|normal|inverted
+xrandr --output "$OUTPUT" --rotate "$ROTATE"
+
+# --- Touch coordinate transform --------------------------------------------
+# The touch digitizer reports raw (unrotated) coordinates independent of the
+# xrandr rotation above — without this, touches land 90° off from what's
+# visually tapped. Requires the `xinput` package (see setup-kiosk.sh).
+# 1. Find the touch device name:             xinput list
+#    (look for your touchscreen's reported name, e.g. "HID... Touchscreen")
+# 2. The matrix below matches ROTATE=left; if ROTATE=right, try:
+#      0 -1 1  1 0 0  0 0 1
+#    But treat both as starting guesses, not answers — panel/driver
+#    combinations have been observed that match neither "standard" matrix.
+#    Set one, reload with `xinput set-prop <device> 'Coordinate
+#    Transformation Matrix' <9 numbers>` (no restart needed), and tap all
+#    four edges of the screen before trusting it.
+TOUCH_DEVICE="${OPENFAMHUB_TOUCH_DEVICE:-}"  # CONFIRM on hardware — xinput list
+if [ -n "$TOUCH_DEVICE" ]; then
+  xinput set-prop "$TOUCH_DEVICE" 'Coordinate Transformation Matrix' 0 1 0 -1 0 1 0 0 1
+fi
+
+# Hide the mouse cursor when idle (kiosk feel). Requires `unclutter`.
+unclutter -idle 0.5 -root &
+
+# Minimal window manager.
+openbox-session &
+
+# Wait for the app to answer before launching the browser.
+until curl -sf http://localhost:8080 >/dev/null 2>&1; do sleep 2; done
+
+# Use chromium or chromium-browser depending on distro.
+CHROME_BIN="$(command -v chromium || command -v chromium-browser)"
+
+exec "$CHROME_BIN" \
+  --kiosk \
+  --incognito \
+  --noerrdialogs \
+  --disable-infobars \
+  --disable-session-crashed-bubble \
+  --disable-pinch \
+  --overscroll-history-navigation=0 \
+  --touch-events=enabled \
+  --check-for-update-interval=31536000 \
+  --remote-debugging-port=9222 \
+  http://localhost:8080
