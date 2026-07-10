@@ -42,6 +42,10 @@
     return `${Math.round(hr / 24)}d ago`;
   }
 
+  // Uploaded photos are stored by filename and served from /api/journal/img/.
+  // An absolute path or full URL (e.g. the bundled demo photos) is used as-is.
+  const photoSrc = (p) => (/^(https?:)?\/\//.test(p) || p.startsWith('/') ? p : `/api/journal/img/${p}`);
+
   const dayNum = (localDate) => Number(localDate.slice(8, 10));
   const monthAbbr = (localDate) => MONTHS[Number(localDate.slice(5, 7)) - 1].slice(0, 3).toUpperCase();
 
@@ -99,7 +103,7 @@
         {@const author = byId(e.authorId)}
         <div class="card entry" style="border-left-color:{author?.color || 'var(--hairline)'};">
           {#if e.photoPath}
-            <div class="photo"><img src="/api/journal/img/{e.photoPath}" alt="" /></div>
+            <div class="photo"><img src={photoSrc(e.photoPath)} alt="" /></div>
           {/if}
           <div class="ehead">
             <AvatarChip

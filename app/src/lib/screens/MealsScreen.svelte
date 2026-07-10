@@ -11,7 +11,7 @@
     getGroceryList,
     setGroceryItemDone
   } from '../api.js';
-  import { dashboard } from '../data/mock.js';
+  import { dashboard, DEMO_MEAL_IMAGES } from '../data/mock.js';
   import { refreshTick, bumpRefresh } from '../refresh.svelte.js';
 
   // Grocy is dropped (single-app: Mealie only) — no Pantry tab.
@@ -157,7 +157,7 @@
   function cellsFor(day) {
     const live = livePlan && livePlan[iso(day.date)];
     if (live) return live;
-    return day.meals.map((name) => (name ? { title: name, img: null } : null));
+    return day.meals.map((name) => (name ? { title: name, img: DEMO_MEAL_IMAGES[name] || null } : null));
   }
 
   const hideImg = (e) => (e.currentTarget.style.display = 'none'); // → striped fallback

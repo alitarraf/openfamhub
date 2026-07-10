@@ -4,8 +4,8 @@
 export const members = [
   { id: 'dad', name: 'Dad', color: '#2E8BC0', tint: '#E7F1F8', tintBorder: '#CDE4F2', mono: 'D' },
   { id: 'mom', name: 'Mom', color: '#E0699A', tint: '#FDEFF5', tintBorder: '#F4D3E2', mono: 'M' },
-  { id: 'kid1', name: 'Kid 1', color: '#E0A11B', tint: '#FFF6E6', tintBorder: '#F4E3BD', mono: '1', kid: true },
-  { id: 'kid2', name: 'Kid 2', color: '#2FA37C', tint: '#EAF6F0', tintBorder: '#CDE9DD', mono: '2', kid: true }
+  { id: 'kid1', name: 'Mia', color: '#E0A11B', tint: '#FFF6E6', tintBorder: '#F4E3BD', mono: 'M', kid: true },
+  { id: 'kid2', name: 'Leo', color: '#2FA37C', tint: '#EAF6F0', tintBorder: '#CDE9DD', mono: 'L', kid: true }
 ];
 
 export const byId = Object.fromEntries(members.map((m) => [m.id, m]));
@@ -140,41 +140,49 @@ export const choreCards = [
   {
     id: 'dad',
     points: 800,
-    completion: 0.6,
-    earnedToday: 15,
+    completion: 0.5,
+    earnedToday: 30,
     tasks: [
-      { title: 'Take out trash', icon: 'delete', catKey: 'sky', points: 15, done: false },
-      { title: 'Sweep kitchen', icon: 'cleaning_services', catKey: 'fern', points: 15, done: true }
+      { title: 'Take out trash', icon: 'delete', catKey: 'sky', points: 15, done: true },
+      { title: 'Sweep kitchen', icon: 'cleaning_services', catKey: 'fern', points: 15, done: true },
+      { title: 'Mow the lawn', icon: 'grass', catKey: 'fern', points: 20, done: false },
+      { title: 'Wash the car', icon: 'local_car_wash', catKey: 'sky', points: 15, done: false }
     ]
   },
   {
     id: 'mom',
     points: 640,
-    completion: 0.72,
-    earnedToday: 15,
+    completion: 0.6,
+    earnedToday: 25,
     tasks: [
       { title: 'Meal prep', icon: 'restaurant', catKey: 'fern', points: 15, done: true },
-      { title: 'Water plants', icon: 'potted_plant', catKey: 'fern', points: 10, done: false }
+      { title: 'Fold laundry', icon: 'local_laundry_service', catKey: 'iris', points: 10, done: true },
+      { title: 'Water plants', icon: 'potted_plant', catKey: 'fern', points: 10, done: false },
+      { title: 'Grocery run', icon: 'shopping_cart', catKey: 'sky', points: 15, done: false }
     ]
   },
   {
     id: 'kid1',
     points: 320,
-    completion: 0.45,
-    earnedToday: 10,
+    completion: 0.4,
+    earnedToday: 15,
     tasks: [
       { title: 'Make bed', icon: 'bed', catKey: 'iris', points: 10, done: true },
+      { title: 'Brush teeth', icon: 'dentistry', catKey: 'sky', points: 5, done: true },
+      { title: 'Practice piano', icon: 'piano', catKey: 'gold', points: 15, done: false },
       { title: 'Feed the dog', icon: 'pets', catKey: 'coral', points: 10, done: false }
     ]
   },
   {
     id: 'kid2',
     points: 510,
-    completion: 0.88,
-    earnedToday: 0,
+    completion: 0.6,
+    earnedToday: 20,
     tasks: [
+      { title: 'Set the table', icon: 'restaurant', catKey: 'fern', points: 10, done: true },
       { title: 'Homework', icon: 'school', catKey: 'sky', points: 20, done: false },
-      { title: 'Tidy room', icon: 'checkroom', catKey: 'fern', points: 15, done: false }
+      { title: 'Walk the dog', icon: 'directions_walk', catKey: 'iris', points: 10, done: false },
+      { title: 'Tidy room', icon: 'checkroom', catKey: 'gold', points: 15, done: false }
     ]
   }
 ];
@@ -289,7 +297,7 @@ export const journal = {
       authorId: 'mom',
       text: 'Rainy Saturday pancakes 🥞',
       tag: null,
-      photoPath: null,
+      photoPath: '/demo/journal/pancakes.png',
       hearts: 2,
       localDate: '2024-05-04',
       createdAt: '2024-05-04T15:00:00.000Z',
@@ -298,7 +306,7 @@ export const journal = {
     {
       id: 2,
       authorId: 'dad',
-      text: 'Kid 1 lost her first tooth today! 🦷',
+      text: 'Mia lost her first tooth today! 🦷',
       tag: 'milestone',
       photoPath: null,
       hearts: 3,
@@ -309,7 +317,7 @@ export const journal = {
     {
       id: 3,
       authorId: 'mom',
-      text: '"I\'m not tired, I\'m just resting my eyes" — Kid 2',
+      text: '"I\'m not tired, I\'m just resting my eyes" — Leo',
       tag: 'quote',
       photoPath: null,
       hearts: 5,
@@ -333,7 +341,7 @@ export const journal = {
     {
       id: 99,
       authorId: 'mom',
-      text: "Kid 1's first steps! 👣",
+      text: "Mia's first steps! 👣",
       tag: 'milestone',
       photoPath: null,
       hearts: 8,
@@ -353,6 +361,20 @@ export const journal = {
 // Meal grid is Sun→Sat × 4 slots. A small rotation of weekly menus so paging
 // weeks shows variety until the Mealie adapter replaces it; selection by
 // week-of-year lives in calendar.js (mealsForWeek).
+// Illustrated demo thumbnails for a few common dishes, keyed by the exact menu
+// name below. They dress up the fallback meal grid so it isn't all striped
+// placeholders before a real Mealie plan (which brings its own photos) lands.
+export const DEMO_MEAL_IMAGES = {
+  Pancakes: '/demo/meals/pancakes.png',
+  Waffles: '/demo/meals/pancakes.png',
+  Salmon: '/demo/meals/salmon.png',
+  Tacos: '/demo/meals/tacos.png',
+  'Pizza night': '/demo/meals/pizza.png',
+  'Pasta bake': '/demo/meals/pasta.png',
+  Lasagna: '/demo/meals/pasta.png',
+  Burgers: '/demo/meals/burgers.png'
+};
+
 export const MEAL_SLOTS = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 export const MEAL_MENUS = [
   [

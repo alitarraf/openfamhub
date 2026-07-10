@@ -52,13 +52,13 @@ console.log('composeRecap');
 ok('names active members with chores, points, and streaks; skips inactive ones', () => {
   const { text, memberIds } = composeRecap('Weekly recap', week, week);
   assert.match(text, /^Weekly recap — /);
-  assert.match(text, /Kid 1: 4 chores done · 4 ⭐ earned · 3-day streak/);
-  assert.doesNotMatch(text, /Kid 2:/); // no activity → not listed
+  assert.match(text, /Mia: 4 chores done · 4 ⭐ earned · 3-day streak/);
+  assert.doesNotMatch(text, /Leo:/); // no activity → not listed
   assert.deepEqual(memberIds, ['kid1']);
 });
 ok('lists redemptions and the week’s journal moments with the most-loved quote', () => {
   const { text } = composeRecap('Weekly recap', week, week);
-  assert.match(text, /Kid 1 redeemed “movie-night”/);
+  assert.match(text, /Mia redeemed “movie-night”/);
   assert.match(text, /1 journal moment · most loved: “Kid1 rode a bike/);
 });
 ok('an empty week reads as a quiet stretch, not an error', () => {

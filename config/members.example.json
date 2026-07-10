@@ -1,6 +1,6 @@
 [
-  { "id": "dad", "name": "Dad", "color": "#2E8BC0" },
-  { "id": "mom", "name": "Mom", "color": "#E0699A" },
-  { "id": "kid1", "name": "Kid 1", "color": "#E0A11B", "kid": true },
-  { "id": "kid2", "name": "Kid 2", "color": "#2FA37C", "kid": true }
+  { "id": "dad", "name": "Dad", "color": "#2E8BC0", "avatar": "/demo/avatars/dad.png" },
+  { "id": "mom", "name": "Mom", "color": "#E0699A", "avatar": "/demo/avatars/mom.png" },
+  { "id": "kid1", "name": "Mia", "color": "#E0A11B", "kid": true, "avatar": "/demo/avatars/mia.png" },
+  { "id": "kid2", "name": "Leo", "color": "#2FA37C", "kid": true, "avatar": "/demo/avatars/leo.png" }
 ]

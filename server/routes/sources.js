@@ -19,14 +19,20 @@ const { listPhotos, PHOTOS_DIR } = photosProvider;
 
 export const sourceRoutes = Router();
 
-// Per-member avatar URLs { memberId: cdnUrl } sourced from Todoist (Sync API).
-// Purely cosmetic: any failure returns {} (never 503) so chips fall back to
-// monograms without disturbing the wall.
+// Per-member avatar URLs { memberId: url }. A member can pin an `avatar` in
+// config/members.json (any URL or app-served path, e.g. /demo/avatars/dad.png) —
+// handy for families not on Todoist. Live Todoist photos, when present, win over
+// the configured one. Purely cosmetic: any failure returns just the configured
+// map (never 503) so chips fall back to those, or to monograms.
 sourceRoutes.get('/api/avatars', async (_req, res) => {
+  const roster = members();
+  const configured = Object.fromEntries(
+    roster.filter((m) => m.avatar).map((m) => [m.id, m.avatar])
+  );
   try {
-    res.json(await fetchAvatars(members()));
+    res.json({ ...configured, ...(await fetchAvatars(roster)) });
   } catch {
-    res.json({});
+    res.json(configured);
   }
 });
 
