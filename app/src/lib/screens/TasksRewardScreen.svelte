@@ -5,7 +5,7 @@
   import Icon from '../components/Icon.svelte';
   import { cat } from '../data/mock.js';
   import { members } from '../roster.svelte.js';
-  import { getRewards, assignReward, unassignReward, redeemReward } from '../api.js';
+  import { getRewards, assignReward, unassignReward, redeemReward, setRewardHidden } from '../api.js';
   import { refreshTick, bumpRefresh } from '../refresh.svelte.js';
 
   let { onSubTab } = $props();
@@ -48,6 +48,21 @@
       [memberId]: on ? [...current, rewardId] : current.filter((id) => id !== rewardId)
     };
   }
+
+  // Hide/show a reward from the wall (no keyboard — creating/naming is
+  // PWA-only). Hiding drops it off every member's redeem grid; the server also
+  // clears its assignments, so mirror that locally for an instant update.
+  async function toggleHide(rewardId, hidden) {
+    const ok = await setRewardHidden(rewardId, hidden);
+    if (!ok) return;
+    catalog = catalog.map((r) => (r.id === rewardId ? { ...r, hidden } : r));
+    if (hidden) {
+      assignments = Object.fromEntries(
+        Object.entries(assignments).map(([mid, ids]) => [mid, ids.filter((id) => id !== rewardId)])
+      );
+    }
+    bumpRefresh();
+  }
 </script>
 
 <div class="screen">
@@ -62,17 +77,30 @@
 
   {#if showManage}
     <div class="card manage">
-      <div class="mhead">Tap a member's initial to assign or remove a reward.</div>
+      <div class="mhead">
+        Tap a member's initial to assign a reward, or the eye to hide one from the wall. Add new rewards from the phone
+        app.
+      </div>
       <div class="mgrid">
         {#each catalog as r}
-          <div class="mcard">
-            <span class="ic" style="background:{cat[r.catKey][1]};">
-              <Icon name={r.icon} size={26} color={cat[r.catKey][0]} />
-            </span>
+          <div class="mcard" class:hidden={r.hidden}>
+            <div class="mtop">
+              <span class="ic" style="background:{cat[r.catKey][1]};">
+                <Icon name={r.icon} size={26} color={cat[r.catKey][0]} />
+              </span>
+              <button
+                class="hidebtn"
+                onclick={() => toggleHide(r.id, !r.hidden)}
+                aria-label="{r.hidden ? 'Show' : 'Hide'} {r.name}"
+              >
+                <Icon name={r.hidden ? 'visibility' : 'visibility_off'} size={20} color="var(--ink-soft)" />
+              </button>
+            </div>
             <div class="mname">{r.name}</div>
             <div class="mcost">
               <Icon name="star" size={16} fill color="var(--gold)" />
               <span>{r.cost}</span>
+              {#if r.hidden}<span class="mhidden">Hidden</span>{/if}
             </div>
             <div class="mtoggles">
               {#each members() as m}
@@ -81,6 +109,7 @@
                   class="mchip"
                   style="background:{on ? m.color : 'var(--bg)'}; color:{on ? '#fff' : 'var(--ink-soft)'};"
                   onclick={() => toggleAssign(m.id, r.id, !on)}
+                  disabled={r.hidden}
                   aria-label="{on ? 'Remove' : 'Assign'} {r.name} {on ? 'from' : 'to'} {m.name}"
                 >
                   {m.mono}
@@ -106,7 +135,7 @@
           <div class="rgrid">
             {#each assignments[m.id] || [] as rewardId}
               {@const r = byRewardId[rewardId]}
-              {#if r}
+              {#if r && !r.hidden}
                 <RewardCard
                   variant="tile"
                   name={r.name}
@@ -240,6 +269,31 @@
     flex-direction: column;
     gap: 8px;
   }
+  .mcard.hidden {
+    opacity: 0.55;
+  }
+  .mtop {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+  }
+  .hidebtn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: none;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .mhidden {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink-faint);
+    margin-left: 6px;
+  }
   .ic {
     width: 48px;
     height: 48px;
@@ -275,5 +329,9 @@
     font-weight: 700;
     font-size: 15px;
     cursor: pointer;
+  }
+  .mchip:disabled {
+    opacity: 0.4;
+    cursor: default;
   }
 </style>

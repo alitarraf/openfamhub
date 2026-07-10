@@ -122,6 +122,40 @@ export const MIGRATIONS = [
         updated_at TEXT
       );
     `
+  },
+  {
+    version: 5,
+    name: 'user-editable reward catalog (custom rewards + built-in hide overrides)',
+    sql: `
+      -- Rewards a parent adds from the companion PWA, layered on top of the
+      -- file-authored base catalog (server/config/rewards.js). Shape and
+      -- validation live in server/rewards/index.js, not here. 'id' is the
+      -- ledger's stable redemption key (a bare TEXT column there, no FK) —
+      -- generated once on create and frozen on edit. 'hidden' exists because
+      -- removing a reward that already has redemption history would orphan
+      -- those ledger rows (they'd render as raw ids in the recap), so a used
+      -- reward is hidden rather than deleted.
+      CREATE TABLE IF NOT EXISTS custom_rewards (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        icon TEXT NOT NULL,
+        cat_key TEXT NOT NULL,
+        cost INTEGER NOT NULL,
+        hidden INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      -- Per-built-in overrides, keyed by the base catalog's id. MVP stores only
+      -- a hide flag, so a family can turn off a bundled reward from the UI
+      -- without editing the file; name/cost of built-ins stay file-authored.
+      -- Room to grow (field overrides) later.
+      CREATE TABLE IF NOT EXISTS reward_overrides (
+        id TEXT PRIMARY KEY,
+        hidden INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL
+      );
+    `
   }
 ];
 

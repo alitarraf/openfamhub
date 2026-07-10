@@ -15,6 +15,7 @@
   import { cat } from './lib/data/mock.js';
   import AvatarChip from './lib/components/AvatarChip.svelte';
   import TaskRow from './lib/components/TaskRow.svelte';
+  import RewardCard from './lib/components/RewardCard.svelte';
   import Icon from './lib/components/Icon.svelte';
 
   let stage = $state('loading'); // loading | pick | pin | main
@@ -59,6 +60,65 @@
   let sitterSaved = $state(false);
   let isParent = $derived(!!me && sitterInfo.parents.some((p) => p.id === me.memberId));
 
+  // --- Reward catalog editing (parents only) -----------------------------
+  // Creating/editing/naming a reward is typing, so it lives here on the phone,
+  // not on the wall (the wall's Manage view only hides rewards). Same parent
+  // gate as the Sitter tab — the server re-checks (requireParentMobileAuth).
+  // The catalog is the merged base + custom set WITH hidden ones, so a parent
+  // can turn a bundled reward back on; the wall/redeem surfaces filter hidden.
+  let rewardCatalog = $state([]); // [{ id, name, icon, catKey, cost, hidden, source }]
+  let loadingRewards = $state(false);
+  let rewardView = $state('list'); // list | edit
+  let editingId = $state(null); // custom reward id being edited, or null for a new one
+  let rName = $state('');
+  let rCost = $state(10);
+  let rIcon = $state('star');
+  let rCatKey = $state('sky');
+  let savingReward = $state(false);
+  let rewardError = $state('');
+  // A tap-grid of common family-reward icons; a parent can also type any other
+  // Material Symbols name in the field and watch the preview card update live.
+  const REWARD_ICONS = [
+    'icecream',
+    'cake',
+    'local_pizza',
+    'cookie',
+    'lunch_dining',
+    'local_cafe',
+    'movie',
+    'sports_esports',
+    'stadia_controller',
+    'toys',
+    'smart_toy',
+    'celebration',
+    'pedal_bike',
+    'skateboarding',
+    'sports_soccer',
+    'sports_basketball',
+    'pool',
+    'park',
+    'attractions',
+    'confirmation_number',
+    'music_note',
+    'headphones',
+    'palette',
+    'menu_book',
+    'pets',
+    'bedtime',
+    'phone_iphone',
+    'shopping_bag',
+    'savings',
+    'card_giftcard'
+  ];
+  // Live preview colours for the edit form (mirrors RewardCard's inputs).
+  let rColor = $derived(cat[rCatKey]?.[0] || 'var(--person)');
+  let rTint = $derived(cat[rCatKey]?.[1] || 'var(--person-tint)');
+  // Cost as a number, and whether the form is savable. An empty number input
+  // binds to null → NaN here, so guard on it (don't silently save a 0-cost
+  // reward); the server enforces the same [0, 100000] integer rule.
+  let rCostNum = $derived(typeof rCost === 'number' ? rCost : parseInt(rCost, 10));
+  let canSaveReward = $derived(!!rName.trim() && Number.isInteger(rCostNum) && rCostNum >= 0 && rCostNum <= 100000);
+
   onMount(async () => {
     hydrateAvatars(); // cosmetic, never blocks — see App.svelte's same call
     // Unlike the wall (App.svelte), this determines who can even log in, so
@@ -68,7 +128,9 @@
     // Cosmetic, never blocks: learn whether a Mealie launcher tab should show.
     fetch('/api/config')
       .then((r) => (r.ok ? r.json() : null))
-      .then((cfg) => { if (cfg?.mealieUrl) mealieUrl = cfg.mealieUrl; })
+      .then((cfg) => {
+        if (cfg?.mealieUrl) mealieUrl = cfg.mealieUrl;
+      })
       .catch(() => {});
     try {
       const res = await fetch('/api/mobile/me');
@@ -234,8 +296,10 @@
     picked = null;
     tasks = [];
     entries = [];
+    rewardCatalog = [];
     tab = 'chores';
     journalView = 'list';
+    rewardView = 'list';
     stage = 'pick';
   }
 
@@ -243,6 +307,10 @@
     tab = t;
     if (t === 'journal' && !entries.length && !loadingJournal) loadJournal();
     if (t === 'sitter') loadSitter();
+    if (t === 'rewards') {
+      rewardView = 'list';
+      loadRewards();
+    }
   }
 
   // Load the babysitter info + seed the editor form. Public read; also tells
@@ -368,6 +436,91 @@
     const res = await fetch(`/api/journal/${id}/delete`, { method: 'POST' }).catch(() => null);
     if (!res || !res.ok) entries = prev;
   }
+
+  // --- Reward catalog actions --------------------------------------------
+  async function loadRewards() {
+    loadingRewards = true;
+    try {
+      const res = await fetch('/api/rewards');
+      if (res.ok) rewardCatalog = (await res.json()).catalog;
+    } catch {
+      /* leave whatever's already shown */
+    }
+    loadingRewards = false;
+  }
+
+  function newReward() {
+    editingId = null;
+    rName = '';
+    rCost = 10;
+    rIcon = 'star';
+    rCatKey = 'sky';
+    rewardError = '';
+    rewardView = 'edit';
+  }
+
+  function editReward(r) {
+    editingId = r.id;
+    rName = r.name;
+    rCost = r.cost;
+    rIcon = r.icon;
+    rCatKey = r.catKey;
+    rewardError = '';
+    rewardView = 'edit';
+  }
+
+  async function saveReward() {
+    if (savingReward) return;
+    if (!rName.trim()) {
+      rewardError = 'Give the reward a name.';
+      return;
+    }
+    if (!Number.isInteger(rCostNum) || rCostNum < 0) {
+      rewardError = 'Enter a cost of 0 or more.';
+      return;
+    }
+    savingReward = true;
+    rewardError = '';
+    const body = { name: rName.trim(), cost: rCostNum, icon: rIcon.trim(), catKey: rCatKey };
+    const url = editingId ? `/api/rewards/${editingId}` : '/api/rewards';
+    try {
+      const res = await fetch(url, {
+        method: editingId ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await loadRewards();
+        rewardView = 'list';
+      } else {
+        rewardError = data.error || 'Could not save';
+      }
+    } catch {
+      rewardError = 'Connection failed';
+    }
+    savingReward = false;
+  }
+
+  // Hide/show any reward (built-in or custom). Hidden ones drop off the wall's
+  // redeem/assign surfaces but stay listed here (dimmed) with a Show toggle.
+  async function toggleHideReward(r) {
+    const res = await fetch(`/api/rewards/${r.id}/hide`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hidden: !r.hidden })
+    }).catch(() => null);
+    if (res && res.ok) await loadRewards();
+  }
+
+  // Remove a custom reward. The server hard-deletes it only if it was never
+  // redeemed; a reward with ledger history is hidden instead (so past
+  // redemptions still resolve a name in the recap) — either way it leaves the
+  // visible catalog, and loadRewards reflects which happened.
+  async function deleteReward(r) {
+    const res = await fetch(`/api/rewards/${r.id}`, { method: 'DELETE' }).catch(() => null);
+    if (res && res.ok) await loadRewards();
+  }
 </script>
 
 <div class="page">
@@ -486,6 +639,97 @@
       <button class="save" disabled={!text.trim() || posting} onclick={saveEntry}>{posting ? 'Saving…' : 'Save'}</button
       >
     </div>
+  {:else if stage === 'main' && tab === 'rewards' && rewardView === 'edit'}
+    <div class="composer">
+      <button class="back" onclick={() => (rewardView = 'list')}
+        ><Icon name="chevron_left" size={22} color="var(--ink-soft)" /> Back</button
+      >
+
+      <!-- Live preview: the exact card the family sees, updating as you type.
+           Non-interactive here (pointer-events off) — the Redeem button is part
+           of the card's look but does nothing in the editor. -->
+      <div class="rpreview">
+        <RewardCard
+          name={rName.trim() || 'New reward'}
+          cost={Number.isInteger(rCostNum) && rCostNum >= 0 ? rCostNum : 0}
+          icon={rIcon.trim() || 'card_giftcard'}
+          iconColor={rColor}
+          iconBg={rTint}
+          color={rColor}
+          variant="tile"
+        />
+      </div>
+
+      <div class="field">
+        <div class="flabel">Name</div>
+        <input class="sinput" maxlength="80" placeholder="e.g. Movie night" bind:value={rName} />
+      </div>
+
+      <div class="field">
+        <div class="flabel">Cost</div>
+        <div class="stepper">
+          <button
+            class="stepbtn"
+            onclick={() => (rCost = Math.max(0, (Number.isFinite(rCostNum) ? rCostNum : 0) - 1))}
+            aria-label="Decrease cost"
+          >
+            <Icon name="remove" size={22} color="var(--ink-soft)" />
+          </button>
+          <div class="stepval">
+            <Icon name="star" size={18} fill color="var(--gold)" />
+            <input class="stepinput" type="number" min="0" bind:value={rCost} />
+          </div>
+          <button
+            class="stepbtn"
+            onclick={() => (rCost = (Number.isFinite(rCostNum) ? rCostNum : 0) + 1)}
+            aria-label="Increase cost"
+          >
+            <Icon name="add" size={22} color="var(--ink-soft)" />
+          </button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="flabel">Colour</div>
+        <div class="chiprow">
+          {#each Object.keys(cat) as key}
+            <button
+              class="swatch"
+              class:on={rCatKey === key}
+              style="background:{cat[key][1]}; border-color:{rCatKey === key ? cat[key][0] : 'transparent'};"
+              onclick={() => (rCatKey = key)}
+              aria-label={key}
+            >
+              <span class="swatchdot" style="background:{cat[key][0]};"></span>
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="flabel">Icon</div>
+        <input class="sinput" maxlength="48" placeholder="Material Symbols name, e.g. movie" bind:value={rIcon} />
+        <div class="iconhint">Type any Material Symbols name, or pick one below.</div>
+        <div class="icongrid">
+          {#each REWARD_ICONS as name}
+            <button
+              class="iconcell"
+              class:on={rIcon.trim() === name}
+              style={rIcon.trim() === name ? `background:${rTint};` : ''}
+              onclick={() => (rIcon = name)}
+              aria-label={name}
+            >
+              <Icon {name} size={26} color={rIcon.trim() === name ? rColor : 'var(--ink-soft)'} />
+            </button>
+          {/each}
+        </div>
+      </div>
+
+      {#if rewardError}<div class="error">{rewardError}</div>{/if}
+      <button class="save" disabled={!canSaveReward || savingReward} onclick={saveReward}>
+        {savingReward ? 'Saving…' : editingId ? 'Save changes' : 'Add reward'}
+      </button>
+    </div>
   {:else if stage === 'main'}
     <div class="main">
       <div class="head">
@@ -535,6 +779,9 @@
       <div class="switcher">
         <button class="stab" class:on={tab === 'chores'} onclick={() => selectTab('chores')}>Chores</button>
         <button class="stab" class:on={tab === 'journal'} onclick={() => selectTab('journal')}>Journal</button>
+        {#if isParent}
+          <button class="stab" class:on={tab === 'rewards'} onclick={() => selectTab('rewards')}>Rewards</button>
+        {/if}
         {#if mealieUrl}
           <!-- A launcher, not an in-app view: a real anchor (reliable from a
                standalone PWA, unlike window.open) that opens Mealie's own app. -->
@@ -653,6 +900,63 @@
           <button class="ssave" onclick={saveSitter} disabled={savingSitter}>
             {savingSitter ? 'Saving…' : sitterSaved ? 'Saved ✓' : 'Save'}
           </button>
+        </div>
+      {:else if tab === 'rewards'}
+        <p class="rintro">
+          The reward catalog the whole family redeems from. Add your own, or hide a built-in you don't use — hidden
+          rewards drop off the wall. Built-in names and costs are set in the config file; here you can only hide them.
+        </p>
+        <button class="add-btn" onclick={newReward}>
+          <Icon name="add" size={20} color="#fff" /> Add a reward
+        </button>
+        <div class="rlist">
+          {#if loadingRewards && !rewardCatalog.length}
+            <div class="empty">Loading…</div>
+          {:else if !rewardCatalog.length}
+            <div class="empty">No rewards yet — add the first one.</div>
+          {:else}
+            {#each rewardCatalog as r (r.id)}
+              <div class="rrow" class:hidden={r.hidden}>
+                <span class="ric" style="background:{r.hidden ? 'var(--bg)' : cat[r.catKey]?.[1] || 'var(--bg)'};">
+                  <Icon
+                    name={r.icon}
+                    size={24}
+                    color={r.hidden ? 'var(--ink-faint)' : cat[r.catKey]?.[0] || 'var(--ink)'}
+                  />
+                </span>
+                <div class="rmeta">
+                  <div class="rname">
+                    {r.name}
+                    {#if r.source === 'builtin'}<span class="rbadge">Built-in</span>{/if}
+                  </div>
+                  <div class="rcost">
+                    <Icon name="star" size={15} fill color="var(--gold)" />
+                    <span>{r.cost}</span>
+                    {#if r.hidden}<span class="rhiddentag">Hidden</span>{/if}
+                  </div>
+                </div>
+                <div class="ractions">
+                  {#if r.source === 'custom'}
+                    <button class="ract" onclick={() => editReward(r)} aria-label="Edit {r.name}">
+                      <Icon name="edit" size={20} color="var(--ink-soft)" />
+                    </button>
+                  {/if}
+                  <button
+                    class="ract"
+                    onclick={() => toggleHideReward(r)}
+                    aria-label={r.hidden ? `Show ${r.name}` : `Hide ${r.name}`}
+                  >
+                    <Icon name={r.hidden ? 'visibility' : 'visibility_off'} size={20} color="var(--ink-soft)" />
+                  </button>
+                  {#if r.source === 'custom'}
+                    <button class="ract" onclick={() => deleteReward(r)} aria-label="Remove {r.name}">
+                      <Icon name="delete" size={20} color="var(--ink-faint)" />
+                    </button>
+                  {/if}
+                </div>
+              </div>
+            {/each}
+          {/if}
         </div>
       {/if}
     </div>
@@ -1170,5 +1474,192 @@
   .ssave:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+  }
+
+  /* --- Rewards editor + list --- */
+  .rpreview {
+    display: flex;
+    justify-content: center;
+    /* Display-only: the card's Redeem button is decorative in the editor. */
+    pointer-events: none;
+  }
+  .rpreview :global(.tile) {
+    width: 100%;
+    max-width: 220px;
+  }
+  .stepper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .stepbtn {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex: none;
+  }
+  .stepval {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    background: var(--surface);
+    padding: 10px;
+  }
+  .stepinput {
+    width: 80px;
+    border: none;
+    background: none;
+    font: inherit;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ink);
+    text-align: center;
+  }
+  /* Hide the number input's spin buttons — the ± steppers are the control. */
+  .stepinput::-webkit-outer-spin-button,
+  .stepinput::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  .stepinput {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+  .swatch {
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .swatchdot {
+    width: 20px;
+    height: 20px;
+    border-radius: 999px;
+  }
+  .iconhint {
+    font-size: 13px;
+    color: var(--ink-faint);
+  }
+  .icongrid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
+  .iconcell {
+    aspect-ratio: 1;
+    border-radius: 12px;
+    border: 1px solid var(--hairline);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .iconcell.on {
+    border-color: transparent;
+  }
+
+  .rintro {
+    font-size: 14px;
+    line-height: 1.45;
+    color: var(--ink-faint);
+    margin: 0;
+  }
+  .rlist {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .rrow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    border-radius: var(--r-md, 14px);
+    padding: 12px 14px;
+  }
+  .rrow.hidden {
+    opacity: 0.55;
+  }
+  .ric {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+  }
+  .rmeta {
+    flex: 1;
+    min-width: 0;
+  }
+  .rname {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .rbadge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    background: var(--bg);
+    border-radius: 999px;
+    padding: 2px 8px;
+  }
+  .rcost {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 3px;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--gold-ink);
+  }
+  .rhiddentag {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-faint);
+    margin-left: 4px;
+  }
+  .ractions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: none;
+  }
+  .ract {
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: none;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  .ract:active {
+    background: var(--bg);
   }
 </style>

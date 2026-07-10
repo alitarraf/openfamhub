@@ -444,3 +444,16 @@ export async function redeemReward(rewardId, memberId) {
     return { ok: false, balance: null };
   }
 }
+
+/** Hide or show a reward (built-in or custom) from the wall's Manage view.
+ * No keyboard needed, so it's ungated like assign/unassign. Returns true on
+ * success. Creating/editing/naming a reward is PWA-only (that's typing). */
+export async function setRewardHidden(rewardId, hidden) {
+  try {
+    const r = await postJson(`/api/rewards/${rewardId}/hide`, { hidden });
+    return r.ok;
+  } catch (err) {
+    console.warn(`[api] setRewardHidden(${rewardId}) failed:`, err.message);
+    return false;
+  }
+}

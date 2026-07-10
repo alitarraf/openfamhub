@@ -13,7 +13,7 @@ import { db } from './db.js';
 import { createEntry } from './index.js';
 import { getWeekRecap } from '../economy/index.js';
 import { members } from '../config/members.js';
-import { rewards } from '../config/rewards.js';
+import { getReward } from '../rewards/index.js';
 import { localDateStr, lastNDates } from '../util/dates.js';
 import { publish } from '../util/bus.js';
 
@@ -55,7 +55,7 @@ export function composeRecap(title, dates, streakDates) {
     dates,
     streakDates
   );
-  const rewardName = (id) => rewards().find((r) => r.id === id)?.name || id;
+  const rewardName = (id) => getReward(id)?.name || id;
 
   const lines = [`${title} — ${fmtDay(dates[0])} to ${fmtDay(dates.at(-1))}`];
   const active = [];

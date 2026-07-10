@@ -24,10 +24,10 @@ OpenFamHub is built around a bottom tab bar with six apps, plus a companion mobi
 - **Authoring stays off the wall.** There's no on-wall "add a chore" or "add an event"
   form — you add those in Todoist / your calendar app / Mealie, same as you do today.
   The wall **displays and acts** (complete a chore, redeem a reward, check off
-  groceries), it doesn't replace the apps you already use to plan. Journal entries are
-  the one piece of content that's native to this app rather than an external tool —
-  they're still written on the phone, never on the wall, for the same reason: no
-  keyboard on a kiosk.
+  groceries), it doesn't replace the apps you already use to plan. Journal entries and
+  custom [rewards](/guide/rewards) are the content native to this app rather than an
+  external tool — and both are authored on the phone, never on the wall, for the same
+  reason: no keyboard on a kiosk.
 - **The wall stays login-free.** It's a trusted physical device — tap your avatar to
   act on its behalf. Only the phone PWA needs a PIN, since a phone isn't shared.
 - **Every screen has a fallback.** An unconfigured or unreachable data source doesn't

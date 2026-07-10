@@ -113,6 +113,17 @@ export function unassignReward(memberId, rewardId) {
   db.prepare('DELETE FROM assignments WHERE member_id = ? AND reward_id = ?').run(memberId, rewardId);
 }
 
+/** Drop a reward from everyone's "working toward" list (on hide/remove). */
+export function clearAssignmentsForReward(rewardId) {
+  db.prepare('DELETE FROM assignments WHERE reward_id = ?').run(rewardId);
+}
+
+/** Has this reward ever been redeemed? Guards hard-delete — a reward with
+ *  ledger history is hidden instead, so past redemptions stay name-resolvable. */
+export function hasRedemptions(rewardId) {
+  return !!db.prepare(`SELECT 1 FROM ledger WHERE reason = 'redeem' AND reward_id = ? LIMIT 1`).get(rewardId);
+}
+
 /**
  * Week-in-review stats per member, ledger-derived (so, like getTodayEarned,
  * it only sees chores completed through this app).

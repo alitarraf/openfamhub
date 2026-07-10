@@ -21,12 +21,14 @@ the PIN just identifies *which* family member is acting.
 
 ## What you can do
 
-Once logged in, a **Chores / Journal** switcher picks between the two things this app
-does:
+Once logged in, a tab switcher picks between what this app does:
 
 - **Chores** — view your own Routine·Chore list and complete tasks (same points-award
   behavior as the wall), check your points balance.
 - **Journal** — browse recent entries and add your own (see below).
+- **Rewards** *(parents only)* — add, edit, and remove the family's custom rewards, and
+  hide any reward from the wall. This is the one place naming a reward can happen, since
+  it needs a keyboard; see [Rewards → Adding rewards from the phone](/guide/rewards#adding).
 - **Meals ↗** *(only when configured)* — a launcher tab that opens your Mealie app in a
   new tab, so you're not juggling two home-screen icons. It's a hand-off to Mealie's own
   web app (which keeps its own login), **not** an embedded view — tap it and you land in
@@ -47,8 +49,9 @@ wall's meal grid.)
 
 ## Writing a journal entry
 
-Tap **Add an entry** on the Journal tab. This is the one screen in the whole app with
-actual free-text typing — everywhere else is tap-only, by design (see
+Tap **Add an entry** on the Journal tab. Along with naming a reward (parents, on the
+Rewards tab), this is one of the few places in the whole app with actual free-text
+typing — and it's deliberately confined to the phone, never the wall (see
 [Overview → Design principles](/guide/overview)).
 
 1. **Photo** (optional) — tap to open your camera or library. Resized and recompressed
