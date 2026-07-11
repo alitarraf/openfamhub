@@ -1,6 +1,7 @@
 <script setup>
 import DefaultTheme from 'vitepress/theme'
 import { withBase } from 'vitepress'
+import { ref, onMounted, onUnmounted } from 'vue'
 
 const Layout = DefaultTheme.Layout
 
@@ -13,6 +14,46 @@ const surfaces = [
   { icon: '💰', title: 'Budget', blurb: 'One honest "safe to spend" number', link: '/guide/budget' },
   { icon: '📔', title: 'Journal', blurb: 'Family moments, written from your phone', link: '/guide/journal' }
 ]
+
+// ── Timed tour captions ────────────────────────────────────────────────
+// Captions live here (HTML), NOT baked into the video, so we can reword and
+// reposition them freely. They're driven by the video's OWN clock
+// (video.currentTime) via requestAnimationFrame, so they can never drift from
+// the footage — they even re-sync correctly across the loop restart.
+// `at` (seconds) must match the dwell schedule in scripts/record-tour.mjs
+// (3.0s per screen, in nav order).
+// `at` matches the SHIPPED video's actual per-screen flip times (measured from
+// scripts/record-tour.mjs output), not the nominal 3.0s marks — the recording
+// drifts ~0.03s/screen.
+const cues = [
+  { at: 0, text: 'Everything the family needs, on one wall' },
+  { at: 3.09, text: 'Everyone’s week, colour-coded per person' },
+  { at: 6.12, text: 'Chores everyone can see — tap to complete' },
+  { at: 9.15, text: 'Kids earn stars, and cash them in' },
+  { at: 12.18, text: 'Tonight’s dinner, already planned' },
+  { at: 15.21, text: 'One honest “safe to spend” number' },
+  { at: 18.23, text: 'The little moments, saved from your phone' }
+]
+
+const tourVideo = ref(null)
+const activeCue = ref(0)
+let raf = 0
+
+function syncCaption() {
+  const v = tourVideo.value
+  if (v) {
+    const t = v.currentTime
+    let i = 0
+    for (let k = 0; k < cues.length; k++) if (t >= cues[k].at) i = k
+    if (i !== activeCue.value) activeCue.value = i
+  }
+  raf = requestAnimationFrame(syncCaption)
+}
+
+onMounted(() => {
+  raf = requestAnimationFrame(syncCaption)
+})
+onUnmounted(() => cancelAnimationFrame(raf))
 </script>
 
 <template>
@@ -57,11 +98,14 @@ const surfaces = [
             </ul>
           </div>
           <div class="showcase-media">
-            <p class="showcase-caption">
-              A quick loop through Home, Calendar, Chores, Rewards, Meals, Budget, and Journal.
-            </p>
+            <div class="showcase-caption" aria-live="polite">
+              <Transition name="cap-fade" mode="out-in">
+                <p :key="activeCue">{{ cues[activeCue].text }}</p>
+              </Transition>
+            </div>
             <div class="showcase-frame">
               <video
+                ref="tourVideo"
                 :poster="withBase('/img/dashboard.png')"
                 autoplay
                 loop
@@ -203,11 +247,30 @@ const surfaces = [
 }
 .showcase-caption {
   max-width: 460px;
-  margin: 0 auto 18px;
-  font-size: 14px;
-  line-height: 1.5;
-  font-weight: 500;
-  color: var(--vp-c-text-2);
+  /* Reserve height so swapping captions of different lengths never shifts the
+     video below it. */
+  min-height: 46px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
+}
+.showcase-caption p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--vp-c-text-1);
+  text-wrap: balance;
+}
+.cap-fade-enter-active,
+.cap-fade-leave-active {
+  transition: opacity 0.35s ease;
+}
+.cap-fade-enter-from,
+.cap-fade-leave-to {
+  opacity: 0;
 }
 </style>
