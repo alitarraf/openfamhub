@@ -8,9 +8,10 @@ export default defineConfig({
   description:
     'A subscription-free, self-hosted family command center for a wall-mounted touchscreen.',
 
-  // GitHub Pages project site lives under /openfamhub/. Serving at a domain
-  // root instead? Set this to '/'.
-  base: '/openfamhub/',
+  // Served at the openfamhub.com domain root (custom domain via CNAME), so the
+  // base is '/'. If you fork and publish to a GitHub project URL instead
+  // (alitarraf.github.io/openfamhub/), set this back to '/openfamhub/'.
+  base: '/',
   cleanUrls: true,
   lastUpdated: true,
 
