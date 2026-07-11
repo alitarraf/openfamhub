@@ -1,8 +1,13 @@
-// Custom theme = the VitePress default theme plus a small CSS override.
-// The only change is enlarging the home hero image (see custom.css) — the
-// dashboard screenshot is a tall portrait shot, and the stock hero clamps it
-// to ~392px, which reads as a thumbnail rather than the product.
+// Custom theme = the VitePress default theme with a custom home Layout.
+// Layout.vue fills two hero slots: the hero image becomes the wall dashboard
+// with the companion phone overlapping its corner, and a "one wall, everything
+// at a glance" showcase (concise list + looping product tour) replaces the
+// stock feature grid.
 import DefaultTheme from 'vitepress/theme';
+import Layout from './Layout.vue';
 import './custom.css';
 
-export default DefaultTheme;
+export default {
+  ...DefaultTheme,
+  Layout
+};

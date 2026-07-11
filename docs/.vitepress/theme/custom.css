@@ -1,27 +1,40 @@
-/* Enlarge the home hero image.
+/* Home hero tweaks that pair with the custom Layout (Layout.vue).
  *
- * dashboard.png is a tall portrait wall shot (1000×1678). VitePress's default
- * hero clamps the image to 320px (392px ≥960px wide), which turns the whole
- * product into a small thumbnail beside the text. We bump the ceiling so the
- * screenshot actually reads — height-led, since the image is portrait. The
- * `.image-src` selector is the default theme's own hero <img>; we only raise
- * its max-* so nothing else about the layout changes. */
-
-@media (min-width: 640px) {
-  .VPHero .image-src {
-    max-width: 360px;
-    max-height: 560px;
-  }
-}
+ * The hero image slot renders a composite (wall dashboard + overlapping phone),
+ * so the default theme's image sizing/positioning no longer applies. We let the
+ * composite size itself and just calm the default container: drop the built-in
+ * offset transform and the blurred background blob so the two device shots read
+ * cleanly against the page. */
 
 @media (min-width: 960px) {
   .VPHero .image-container {
-    /* give the taller image a little more room and pull it up to balance the
-       longer text column on the left */
-    transform: translate(-24px, -20px);
+    transform: none;
   }
-  .VPHero .image-src {
-    max-width: 420px;
-    max-height: 660px;
+}
+
+/* The composite (wall + overlapping phone) is taller than the theme's fixed
+   hero-image box (320×320 on mobile). On narrow screens the hero stacks
+   vertically, so a clamped box lets the composite overflow onto the hero text.
+   Let the image area grow to the composite instead. */
+.VPHero .image,
+.VPHero .image-container {
+  height: auto !important;
+  aspect-ratio: auto !important;
+}
+
+/* The default theme paints a soft gradient blob behind the hero image; with a
+   two-device composite it just muddies the edges, so hide it. */
+.VPHero .image-bg {
+  display: none;
+}
+
+/* On narrow screens the hero stacks (image above text) and the default theme
+   pulls the two together with negative vertical margins (-76/-108px top, -48px
+   bottom) that assume the fixed 320px box. Our composite is taller, so those
+   negatives drag the heading up underneath it. Restore normal flow with a small
+   gap; keep the negative side margins so the shot still runs edge-to-edge. */
+@media (max-width: 959px) {
+  .VPHero .image {
+    margin: 0 -24px 12px;
   }
 }
