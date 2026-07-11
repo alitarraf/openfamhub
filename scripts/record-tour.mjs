@@ -98,13 +98,20 @@ const ENCODE_ONLY = process.argv.includes('--encode-only');
 const REUSE_SERVER = process.env.TOUR_REUSE_SERVER === '1' || process.argv.includes('--reuse-server');
 
 // The tour, in order. `tab` = a bottom-tab-bar button (matched by its visible
-// label); `subtab` = an in-Tasks segmented control button. Dwell is DWELL_MS on
-// each. Home is already visible when the tour starts, so it is the anchor.
+// label); `subtab` = an in-Tasks segmented control button; `celebrate` = tap a
+// kid's chore row done to fire the celebration (avatar pop + confetti + star
+// tick). Each step holds for `dwell` ms (falls back to DWELL_MS). Home is
+// already visible when the tour starts, so it is the anchor.
 const STEPS = [
   { label: 'Home', kind: 'home' },
   { label: 'Calendar', kind: 'tab', text: 'Calendar' },
-  { label: 'Tasks → Chore', kind: 'tab', text: 'Tasks' }, // Tasks opens on the Chore subtab
-  { label: 'Tasks → Reward', kind: 'subtab', text: 'Reward' },
+  { label: 'Chores', kind: 'tab', text: 'Tasks' }, // Tasks opens on the Chore subtab
+  // Tap Leo's "Homework" (an incomplete KID chore — celebrations only fire for
+  // kids). Hold longer: the celebration is a ~2.7s two-beat animation (avatar
+  // pop + two confetti bursts, then the star ticks up at ~2.5s), so a short
+  // dwell would cut off the star landing.
+  { label: 'Chore done → celebrate', kind: 'celebrate', taskText: 'Homework', dwell: 4200 },
+  { label: 'Rewards', kind: 'subtab', text: 'Reward' },
   { label: 'Meals', kind: 'tab', text: 'Meals' },
   { label: 'Budget', kind: 'tab', text: 'Budget' },
   { label: 'Journal', kind: 'tab', text: 'Journal' }
@@ -205,10 +212,15 @@ const tabBtn = (page, text) => page.locator('nav.tabbar button', { hasText: text
 // `.tabs` bar with a "Reward" button — scope to the visible pane (`.pane.active`)
 // so the click hits the segmented control the viewer can actually see.
 const subTabBtn = (page, text) => page.locator('.pane.active .tabs button', { hasText: text });
+// A chore row (TaskRow: <div class="row" role="button">) inside the visible
+// pane, matched by its task title. Clicking it toggles the chore done, which
+// fires the celebration (avatar pop + confetti + star tick) — kids only.
+const choreRow = (page, text) => page.locator('.pane.active .row', { hasText: text });
 
 async function gotoScreen(page, step) {
   if (step.kind === 'tab') await tabBtn(page, step.text).click();
   else if (step.kind === 'subtab') await subTabBtn(page, step.text).click();
+  else if (step.kind === 'celebrate') await choreRow(page, step.taskText).click();
   // 'home' is the initial state — no click.
 }
 
@@ -266,7 +278,7 @@ async function runRecord(browser) {
   for (const step of STEPS) {
     await gotoScreen(page, step); // no-op for Home
     marks.push({ label: step.label, tSec: (Date.now() - t0) / 1000 });
-    await sleep(DWELL_MS);
+    await sleep(step.dwell ?? DWELL_MS);
   }
   // spanSec spans t0 -> just after the LAST screen's full dwell, so the final
   // screen keeps a full DWELL (don't hardcode STEPS*DWELL — the small per-click

@@ -22,17 +22,19 @@ const surfaces = [
 // the footage — they even re-sync correctly across the loop restart.
 // `at` (seconds) must match the dwell schedule in scripts/record-tour.mjs
 // (3.0s per screen, in nav order).
-// `at` matches the SHIPPED video's actual per-screen flip times (measured from
-// scripts/record-tour.mjs output), not the nominal 3.0s marks — the recording
-// drifts ~0.03s/screen.
+// `at` matches the SHIPPED video's actual per-screen flip times, measured from
+// scripts/record-tour.mjs's reported marks (not nominal round seconds — the
+// recording drifts a little). The Chores → celebrate beat is the chore tap that
+// fires the avatar pop + confetti + star tick.
 const cues = [
   { at: 0, text: 'Everything the family needs, on one wall' },
-  { at: 3.09, text: 'Everyone’s week, colour-coded per person' },
-  { at: 6.12, text: 'Chores everyone can see — tap to complete' },
-  { at: 9.15, text: 'Kids earn stars, and cash them in' },
-  { at: 12.18, text: 'Tonight’s dinner, already planned' },
-  { at: 15.21, text: 'One honest “safe to spend” number' },
-  { at: 18.23, text: 'The little moments, saved from your phone' }
+  { at: 3.06, text: 'Everyone’s week, colour-coded per person' },
+  { at: 6.08, text: 'Chores everyone can see — tap to complete' },
+  { at: 9.11, text: 'One tap done — confetti flies, stars add up' },
+  { at: 13.36, text: 'Then cash those stars in for real rewards' },
+  { at: 16.39, text: 'Tonight’s dinner, already planned' },
+  { at: 19.42, text: 'One honest “safe to spend” number' },
+  { at: 22.44, text: 'The little moments, saved from your phone' }
 ]
 
 const tourVideo = ref(null)
