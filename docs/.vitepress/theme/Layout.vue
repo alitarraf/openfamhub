@@ -57,6 +57,9 @@ const surfaces = [
             </ul>
           </div>
           <div class="showcase-media">
+            <p class="showcase-caption">
+              A quick loop through Home, Calendar, Chores, Rewards, Meals, Budget, and Journal.
+            </p>
             <div class="showcase-frame">
               <video
                 :poster="withBase('/img/dashboard.png')"
@@ -69,9 +72,6 @@ const surfaces = [
                 <source :src="withBase('/img/product-tour.mp4')" type="video/mp4" />
               </video>
             </div>
-            <p class="showcase-caption">
-              A quick loop through Home, Calendar, Chores, Rewards, Meals, Budget, and Journal.
-            </p>
           </div>
         </div>
       </section>
@@ -134,7 +134,7 @@ const surfaces = [
 }
 @media (min-width: 860px) {
   .showcase-inner {
-    grid-template-columns: minmax(0, 1fr) 356px;
+    grid-template-columns: minmax(0, 1fr) 460px;
     gap: 56px;
     padding: 80px 32px 16px;
   }
@@ -193,7 +193,7 @@ const surfaces = [
 
 .showcase-media { width: 100%; }
 .showcase-frame {
-  max-width: 356px;
+  max-width: 460px;
   margin: 0 auto;
   border-radius: 18px;
   overflow: hidden;
@@ -207,9 +207,12 @@ const surfaces = [
   height: auto;
 }
 .showcase-caption {
-  margin: 14px 4px 0;
-  font-size: 13px;
-  color: var(--vp-c-text-3);
+  max-width: 460px;
+  margin: 0 auto 18px;
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 500;
+  color: var(--vp-c-text-2);
   text-align: center;
 }
 </style>
