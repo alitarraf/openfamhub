@@ -195,11 +195,6 @@ const surfaces = [
 .showcase-frame {
   max-width: 460px;
   margin: 0 auto;
-  border-radius: 18px;
-  overflow: hidden;
-  background: var(--vp-c-bg-soft);
-  box-shadow: 0 18px 44px -20px rgba(20, 24, 33, 0.5);
-  border: 1px solid var(--vp-c-divider);
 }
 .showcase-frame video {
   display: block;
