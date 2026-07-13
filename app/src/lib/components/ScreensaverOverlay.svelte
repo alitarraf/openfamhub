@@ -29,10 +29,22 @@
   let index = $state(0);
   $effect(() => {
     getPhotos().then((files) => {
-      photos = files;
+      photos = shuffle(files);
       index = 0;
     });
   });
+
+  // Randomize order once per screensaver activation (Fisher-Yates) so the
+  // slideshow isn't a predictable alphabetical march — a fresh shuffle each
+  // time the screensaver kicks in.
+  function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
   $effect(() => {
     if (!photos.length) return;
     const id = setInterval(() => (index = (index + 1) % photos.length), CYCLE_MS);
